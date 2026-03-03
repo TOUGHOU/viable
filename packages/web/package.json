@@ -11,16 +11,19 @@
     "clean": "rm -rf dist node_modules"
   },
   "dependencies": {
+    "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-slot": "^1.0.2",
-    "class-variance-authority": "^0.7.0",
-    "clsx": "^2.1.0",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "@vibe/utils-inspector": "workspace:*",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "code-inspector-plugin": "^1.4.2",
     "lucide-react": "^0.576.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.28.0",
     "swr": "^2.2.5",
-    "tailwind-merge": "^2.2.0",
+    "tailwind-merge": "^2.6.1",
     "zustand": "^4.5.0"
   },
   "devDependencies": {
