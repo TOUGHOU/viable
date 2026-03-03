@@ -1,0 +1,29 @@
+{
+  "name": "vibe-coding",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "description": "Vibe coding product - monorepo",
+  "scripts": {
+    "dev": "pnpm -r --parallel run dev",
+    "build": "pnpm -r run build",
+    "lint": "eslint .",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "test": "pnpm -r run test 2>/dev/null || true",
+    "clean": "pnpm -r run clean 2>/dev/null || true"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@types/node": "^20.10.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.2.0",
+    "typescript": "^5.3.0",
+    "typescript-eslint": "^8.0.0"
+  },
+  "engines": {
+    "node": ">=18",
+    "pnpm": ">=8"
+  },
+  "packageManager": "pnpm@8.15.0"
+}

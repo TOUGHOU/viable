@@ -1,0 +1,9 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// 后续可增加 MySQL 数据源或单独服务连接 MySQL

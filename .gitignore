@@ -1,0 +1,40 @@
+# Node modules
+node_modules/
+
+# Build outputs
+dist/
+build/
+out/
+*.log
+
+# Local env files
+.env*
+!.env.example
+
+# IDEs and editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+
+# Coverage reports
+coverage/
+.nyc_output/
+
+# Misc
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+/*.local
+
+# VSCode settings
+.history

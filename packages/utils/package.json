@@ -1,0 +1,6 @@
+{
+  "name": "@vibe/utils",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Vibe coding shared utilities - workspace root for utils/* packages"
+}
