@@ -1,9 +1,10 @@
 /**
  * @file: chatStore.ts
- * @description 对话与当前会话状态（Zustand）
+ * @description 对话与当前会话状态（Zustand），持久化到 localStorage
  */
 
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { Conversation, Message } from '@/types/chat';
 import type { SkillId } from '@/types/chat';
 
@@ -28,46 +29,59 @@ interface ChatState {
   getMessages: (conversationId: string) => Message[];
 }
 
-export const useChatStore = create<ChatState>((set, get) => ({
-  conversations: MOCK_CONVERSATIONS,
-  currentConversationId: null,
-  messagesByConversationId: {},
-  selectedSkill: null,
+const STORAGE_KEY = 'vibe-chat-storage';
 
-  setCurrentConversationId: (id) => set({ currentConversationId: id }),
+export const useChatStore = create<ChatState>()(
+  persist(
+    (set, get) => ({
+      conversations: MOCK_CONVERSATIONS,
+      currentConversationId: null,
+      messagesByConversationId: {},
+      selectedSkill: null,
 
-  setSelectedSkill: (skill) => set({ selectedSkill: skill }),
+      setCurrentConversationId: (id) => set({ currentConversationId: id }),
 
-  addConversation: (c) =>
-    set((state) => ({
-      conversations: [c, ...state.conversations.filter((x) => x.id !== c.id)],
-    })),
+      setSelectedSkill: (skill) => set({ selectedSkill: skill }),
 
-  setConversations: (list) => set({ conversations: list }),
+      addConversation: (c) =>
+        set((state) => ({
+          conversations: [c, ...state.conversations.filter((x) => x.id !== c.id)],
+        })),
 
-  addMessage: (conversationId, message) =>
-    set((state) => {
-      const prev = state.messagesByConversationId[conversationId] ?? [];
-      return {
-        messagesByConversationId: {
-          ...state.messagesByConversationId,
-          [conversationId]: [...prev, message],
-        },
-      };
+      setConversations: (list) => set({ conversations: list }),
+
+      addMessage: (conversationId, message) =>
+        set((state) => {
+          const prev = state.messagesByConversationId[conversationId] ?? [];
+          return {
+            messagesByConversationId: {
+              ...state.messagesByConversationId,
+              [conversationId]: [...prev, message],
+            },
+          };
+        }),
+
+      setMessages: (conversationId, messages) =>
+        set((state) => ({
+          messagesByConversationId: {
+            ...state.messagesByConversationId,
+            [conversationId]: messages,
+          },
+        })),
+
+      startNewChat: () => set({ currentConversationId: null }),
+
+      getMessages: (conversationId) => get().messagesByConversationId[conversationId] ?? [],
     }),
-
-  setMessages: (conversationId, messages) =>
-    set((state) => ({
-      messagesByConversationId: {
-        ...state.messagesByConversationId,
-        [conversationId]: messages,
-      },
-    })),
-
-  startNewChat: () => set({ currentConversationId: null }),
-
-  getMessages: (conversationId) => get().messagesByConversationId[conversationId] ?? [],
-}));
+    {
+      name: STORAGE_KEY,
+      partialize: (state) => ({
+        conversations: state.conversations,
+        messagesByConversationId: state.messagesByConversationId,
+      }),
+    }
+  )
+);
 
 export function createNewConversation(title: string, hasPreview = false): Conversation {
   return {
