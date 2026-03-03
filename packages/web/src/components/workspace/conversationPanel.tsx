@@ -32,9 +32,9 @@ export function ConversationPanel({
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col ">
       {(title || showVersionSelect) && (
-        <div className="flex items-center justify-between border-b border-border px-3 py-2">
+        <div className="flex items-center justify-between border-b border-border px-3 py-2 h-12">
           {title && <span className="text-sm font-medium truncate">{title}</span>}
           {showVersionSelect && (
             <select

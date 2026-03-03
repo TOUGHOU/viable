@@ -28,15 +28,7 @@ export interface Message {
   createdAt: string;
 }
 
-export const SKILLS: SkillItem[] = [
-  // { id: 'quick', label: '快速' },
-  // { id: 'coding', label: '编程' },
-  // { id: 'research', label: '深入研究' },
-  // { id: 'image', label: '图像生成' },
-  // { id: 'write', label: '帮我写作' },
-  // { id: 'video', label: '视频生成' },
-  // { id: 'more', label: '更多' },
-];
+export const SKILLS: SkillItem[] = [];
 
 export const QUICK_QUESTIONS = [
   '资讯:伊朗打击巴林美军 巴林拦截61枚导弹',

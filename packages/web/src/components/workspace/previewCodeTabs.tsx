@@ -27,7 +27,7 @@ export function PreviewCodeTabs({
   return (
     <div
       className={cn(
-        'flex items-center gap-2 border-b border-border bg-muted/30 px-3 py-2',
+        'flex items-center gap-2 border-b border-border bg-muted/30 px-3 py-2 h-12',
         className
       )}
     >
