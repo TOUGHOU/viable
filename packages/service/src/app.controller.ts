@@ -1,5 +1,8 @@
+/**
+ * @file: app.controller.ts
+ * @author: houfujian houfujian@jd.com
+ */
 import { Controller, Get } from '@nestjs/common';
-
 @Controller()
 export class AppController {
   @Get()
