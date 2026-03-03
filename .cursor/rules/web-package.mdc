@@ -1,0 +1,30 @@
+---
+description: Conventions and spec for packages/web (React + Vite + Tailwind + Zustand + SWR). Apply when editing or generating web app code.
+globs: packages/web/**/*
+alwaysApply: false
+---
+
+# Web 包开发约定 (packages/web)
+
+## 规范来源
+
+- 仓库根目录 [spec.md](../../spec.md) 的通用规范与本包约定
+- Web 包功能规格与 Agentic 流程：[packages/web/SPEC.md](../../packages/web/SPEC.md)
+- React 性能与最佳实践：参考 `.agents/skills/vercel-react-best-practices/AGENTS.md`（写/改 React 组件、数据请求、性能优化时遵循）
+
+## 技术栈
+
+- React 18、TypeScript、Vite、Tailwind CSS、shadcn/ui（`@/components/ui`）、Zustand、SWR
+
+## 约定要点
+
+- **组件**：纯函数组件，Props 用接口定义，逻辑用 Hooks
+- **状态**：全局/跨组件用 Zustand；服务端数据用 SWR，注意缓存与 dedup
+- **样式**：Tailwind 类名为主，复用 `@/components/ui`，避免内联 style
+- **文件**：组件文件小驼峰如 `userProfile.tsx`，Hook 文件 `useXxx.ts`
+- **类型**：优先从 `@/` 或 `src/types` 引用，与后端 DTO 命名一致时保持字段一致
+
+## 与 Agent 协作
+
+- 新功能：先看或写 `packages/web/SPEC.md` 中的功能说明/验收点，再实现
+- 改现有代码：遵循本 rule 与 AGENTS.md，保持风格一致、性能友好
