@@ -4,11 +4,19 @@
  * 遵循 Vercel React 实践：子组件按需订阅 store 减少重渲染、过渡动效、视觉分组
  */
 
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { Monitor, Smartphone, SquareDashedMousePointer, Tablet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useWorkspaceStore, type PreviewCodeTab, type DeviceType } from '@/store/workspaceStore';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 
 export type { PreviewCodeTab };
 
@@ -24,12 +32,10 @@ const DEVICE_META: Record<DeviceType, { label: string; Icon: typeof Smartphone }
   desktop: { label: 'PC', Icon: Monitor },
 };
 
-const TAB_TRIGGER_CLASS =
-  'rounded-[5px] px-3 py-1.5 text-sm transition-colors duration-200 data-[state=active]:shadow-sm';
-const ICON_BUTTON_CLASS =
-  'rounded p-1.5 transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+/** 与 inspectorActive 为 true 时的高亮一致：主色背景 + 主色前景 */
+const TAB_TRIGGER_ACTIVE_CLASS =
+  'data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm';
 
-/** 仅订阅 activeTab / setActiveTab，避免设备/高亮变化时重渲染 */
 const PreviewCodeTabsSegment = memo(function PreviewCodeTabsSegment({
   activeTab,
   setActiveTab,
@@ -40,8 +46,12 @@ const PreviewCodeTabsSegment = memo(function PreviewCodeTabsSegment({
   return (
     <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as PreviewCodeTab)}>
       <TabsList className="h-8 rounded-md border border-input bg-muted/60 px-0.5 py-0.5 shadow-sm">
-        <TabsTrigger value="preview">预览</TabsTrigger>
-        <TabsTrigger value="code">代码</TabsTrigger>
+        <TabsTrigger value="preview" className={TAB_TRIGGER_ACTIVE_CLASS}>
+          预览
+        </TabsTrigger>
+        <TabsTrigger value="code" className={TAB_TRIGGER_ACTIVE_CLASS}>
+          代码
+        </TabsTrigger>
       </TabsList>
     </Tabs>
   );
@@ -57,60 +67,73 @@ const CenterToolbarActions = memo(function CenterToolbarActions() {
 
   return (
     <div className="flex items-center gap-2">
-      <button
+      <Button
         type="button"
+        variant="default"
+        size="icon"
+        className="h-8 w-8 shadow-sm ring-1 ring-primary/20 hover:opacity-90"
         onClick={() => setDeviceType(DEVICE_CYCLE[deviceType])}
-        className={cn(
-          ICON_BUTTON_CLASS,
-          'bg-primary text-primary-foreground shadow-sm ring-1 ring-primary/20 hover:opacity-90'
-        )}
         title={`${DEVICE_META[deviceType].label}（点击切换）`}
         aria-label={`设备：${DEVICE_META[deviceType].label}，点击切换`}
       >
         <DeviceIcon className="size-5" aria-hidden />
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
+        variant={inspectorActive ? 'default' : 'ghost'}
+        size="icon"
+        className="h-8 w-8"
         onClick={toggleInspectorActive}
-        className={cn(
-          ICON_BUTTON_CLASS,
-          inspectorActive
-            ? 'bg-primary text-primary-foreground shadow-sm'
-            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-        )}
         title={inspectorActive ? '取消高亮' : '高亮'}
         aria-pressed={inspectorActive}
       >
         <SquareDashedMousePointer className="size-5" aria-hidden />
-      </button>
+      </Button>
     </div>
   );
 });
 
 /** 右侧版本/下载：纯展示与回调，无 store 订阅时可由父组件控制是否渲染 */
+const VERSION_OPTIONS = [
+  { value: 'v2', label: 'V2' },
+  { value: 'v1', label: 'V1' },
+] as const;
+
 const RightToolbarActions = memo(function RightToolbarActions({
   showVersionSelect,
 }: {
   showVersionSelect: boolean;
 }) {
+  const [version, setVersion] = useState<string>('v2');
+
   return (
     <div className="flex items-center gap-2">
       {showVersionSelect ? (
-        <select
-          className="rounded-md border border-input bg-background px-2.5 py-1.5 text-xs shadow-sm transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          aria-label="版本"
-        >
-          <option>V2</option>
-          <option>V1</option>
-        </select>
+        <Select value={version} onValueChange={setVersion}>
+          <SelectTrigger
+            className="h-8 w-[72px] border-input bg-background px-2.5 py-1.5 shadow-sm"
+            aria-label="版本"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="bg-white">
+            {VERSION_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       ) : null}
-      <button
+      <Button
         type="button"
-        className="rounded-md border border-input bg-background px-2.5 py-1.5 text-xs shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        variant="outline"
+        size="sm"
+        className="h-8 px-2.5 py-1.5 text-xs"
         title="下载"
       >
         下载
-      </button>
+      </Button>
     </div>
   );
 });

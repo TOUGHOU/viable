@@ -36,15 +36,6 @@ export function ConversationPanel({
       {(title || showVersionSelect) && (
         <div className="flex items-center justify-between border-b border-border px-3 py-2 h-12">
           {title && <span className="text-sm font-medium truncate">{title}</span>}
-          {showVersionSelect && (
-            <select
-              className="rounded border border-input bg-background px-2 py-1 text-xs"
-              aria-label="版本"
-            >
-              <option>V2</option>
-              <option>V1</option>
-            </select>
-          )}
         </div>
       )}
       <div className="flex-1 overflow-y-auto">
