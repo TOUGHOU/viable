@@ -44,6 +44,7 @@ export const PreviewFrame = forwardRef<HTMLIFrameElement, PreviewFrameProps>(
     const [hasError, setHasError] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
     const [retryCount, setRetryCount] = useState(0);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- setScrollRect used by useMessageHandler
     const [scrollRect, setScrollRect] = useState<{
       top: number;
       left: number;
@@ -73,6 +74,7 @@ export const PreviewFrame = forwardRef<HTMLIFrameElement, PreviewFrameProps>(
       [onDrop]
     );
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- hook returns selectedElement for side effects
     const { selectedElement } = useMessageHandler({
       iframeRef,
       onElementSelect,

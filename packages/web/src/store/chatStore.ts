@@ -93,10 +93,13 @@ export function createNewConversation(title: string, hasPreview = false): Conver
 }
 
 export function createMessage(role: Message['role'], content: string): Message {
+  const now = new Date().toISOString();
   return {
     id: createId(),
     role,
     content,
-    createdAt: new Date().toISOString(),
+    contentFormat: role === 'assistant' ? 'markdown' : 'text',
+    createdAt: now,
+    updatedAt: now,
   };
 }

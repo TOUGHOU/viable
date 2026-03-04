@@ -21,11 +21,23 @@ export interface Conversation {
 
 export type MessageRole = 'user' | 'assistant';
 
+/** 消息内容格式：前端按 contentFormat 渲染（如 markdown 代码块、加粗等） */
+export type MessageContentFormat = 'text' | 'markdown';
+
+/** 发送/流式状态，仅前端使用，不持久化、不通过 API 同步 */
+export type MessageStatus = 'sending' | 'sent' | 'streaming' | 'failed';
+
 export interface Message {
   id: string;
   role: MessageRole;
   content: string;
+  contentFormat?: MessageContentFormat;
   createdAt: string;
+  updatedAt: string;
+  /** 助手消息由哪款模型生成，可选，预留多模型 */
+  model?: string;
+  /** 扩展信息：token 用量、finish_reason 等，按需定义 */
+  metadata?: Record<string, unknown>;
 }
 
 export const SKILLS: SkillItem[] = [];

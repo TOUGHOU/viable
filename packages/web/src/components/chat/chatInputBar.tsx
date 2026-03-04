@@ -17,6 +17,7 @@ export interface ChatInputBarProps {
   selectedSkill: SkillId | null;
   onSelectSkill: (skill: SkillId | null) => void;
   className?: string;
+  disabled?: boolean;
 }
 
 export function ChatInputBar({
@@ -27,9 +28,10 @@ export function ChatInputBar({
   selectedSkill,
   onSelectSkill,
   className,
+  disabled = false,
 }: ChatInputBarProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const canSend = value.trim().length > 0;
+  const canSend = value.trim().length > 0 && !disabled;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,7 +57,8 @@ export function ChatInputBar({
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           rows={1}
-          className="min-h-[24px] max-h-[200px] flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          disabled={disabled}
+          className="min-h-[24px] max-h-[200px] flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50"
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
@@ -71,7 +74,7 @@ export function ChatInputBar({
           className="shrink-0"
           aria-label="发送"
         >
-          <span className="text-muted-foreground">✈️</span>
+          <span className="text-muted-foreground">{disabled ? '…' : '✈️'}</span>
         </Button>
       </div>
       <SkillButtonGroup selectedSkill={selectedSkill} onSelectSkill={onSelectSkill} />

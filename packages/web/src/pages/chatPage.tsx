@@ -5,7 +5,8 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useChatStore, createNewConversation, createMessage } from '@/store/chatStore';
+import { useChatStore, createMessage } from '@/store/chatStore';
+import { createConversation as createConversationApi } from '@/lib/api/chatApi';
 import { SidebarLayout } from '@/components/layout/sidebarLayout';
 import { ConversationHistorySidebar } from '@/components/chat/conversationHistorySidebar';
 import { ChatWelcome } from '@/components/chat/chatWelcome';
@@ -19,7 +20,6 @@ export function ChatPage() {
     setCurrentConversationId,
     addConversation,
     addMessage,
-    setMessages,
     getMessages,
     selectedSkill,
     setSelectedSkill,
@@ -34,31 +34,45 @@ export function ChatPage() {
     setInput('');
   };
 
-  const handleQuickQuestion = (text: string) => {
-    const conv = createNewConversation(text.slice(0, 30), false);
-    addConversation(conv);
-    setCurrentConversationId(conv.id);
-    setMessages(conv.id, [createMessage('user', text)]);
-    setInput('');
-    navigate(`/workspace/${conv.id}`);
-  };
-
-  const handleSend = () => {
-    const text = input.trim();
-    if (!text) return;
-    let conversationId: string;
-    if (!currentConversationId) {
-      const conv = createNewConversation(text.slice(0, 30), false);
+  const handleQuickQuestion = async (text: string) => {
+    try {
+      const conv = await createConversationApi({
+        title: text.slice(0, 30) || '新对话',
+        hasPreview: false,
+      });
       addConversation(conv);
       setCurrentConversationId(conv.id);
       addMessage(conv.id, createMessage('user', text));
-      conversationId = conv.id;
-    } else {
-      addMessage(currentConversationId, createMessage('user', text));
-      conversationId = currentConversationId;
+      setInput('');
+      navigate(`/workspace/${conv.id}`);
+    } catch {
+      setInput('');
     }
-    setInput('');
-    navigate(`/workspace/${conversationId}`);
+  };
+
+  const handleSend = async () => {
+    const text = input.trim();
+    if (!text) return;
+    let conversationId: string;
+    try {
+      if (!currentConversationId) {
+        const conv = await createConversationApi({
+          title: text.slice(0, 30) || '新对话',
+          hasPreview: false,
+        });
+        addConversation(conv);
+        setCurrentConversationId(conv.id);
+        addMessage(conv.id, createMessage('user', text));
+        conversationId = conv.id;
+      } else {
+        addMessage(currentConversationId, createMessage('user', text));
+        conversationId = currentConversationId;
+      }
+      setInput('');
+      navigate(`/workspace/${conversationId}`);
+    } catch {
+      setInput('');
+    }
   };
 
   return (
