@@ -22,7 +22,10 @@ function injectRuntimeIntoReactRouterRoot(code: string, id: string): string {
     return code;
   }
 
-  if (code.includes(`import '${RUNTIME_PUBLIC_PATH}'`) || code.includes(`import "${RUNTIME_PUBLIC_PATH}"`)) {
+  if (
+    code.includes(`import '${RUNTIME_PUBLIC_PATH}'`) ||
+    code.includes(`import "${RUNTIME_PUBLIC_PATH}"`)
+  ) {
     return code;
   }
 
@@ -45,7 +48,7 @@ export function createVitePlugin(options: InspectorPluginOptions = {}): Plugin {
       transformer = new CoreTransformer(transformConfig, config.root);
 
       const req = createRequire(path.join(config.root, 'package.json'));
-      const pkgMain = req.resolve('@vibe/utils-inspector');
+      const pkgMain = req.resolve('@jd/vibe-inspector-plugin');
       runtimeFilePath = path.join(path.dirname(pkgMain), 'runtime/inject.js');
     },
 

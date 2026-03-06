@@ -4,9 +4,10 @@
  */
 import { Module } from '@nestjs/common';
 import { LlmService } from './llm.service';
+import { ToolsService } from './tools.service';
 
 @Module({
-  providers: [LlmService],
+  providers: [LlmService, ToolsService],
   exports: [LlmService],
 })
 export class LlmModule {}

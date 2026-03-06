@@ -42,7 +42,7 @@ pnpm --filter @vibe/web dev
 pnpm --filter @vibe/service start:dev
 
 # 构建 inspector 并供 web 引用
-pnpm --filter @vibe/utils-inspector build
+pnpm --filter @jd/vibe-inspector-plugin build
 
 # 运行 CLI
 pnpm --filter @vibe/cli build && node packages/cli/dist/cli.js --version

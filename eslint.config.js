@@ -1,3 +1,7 @@
+/*
+ * @file: eslint.config.js
+ * @author: houfujian houfujian@jd.com
+ */
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
@@ -12,6 +16,7 @@ export default [
       '**/dist/**',
       '**/coverage/**',
       'pnpm-lock.yaml',
+      'packages/service/data/**',
     ],
   },
   {

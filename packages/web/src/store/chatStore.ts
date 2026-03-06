@@ -23,6 +23,8 @@ interface ChatState {
   setSelectedSkill: (skill: SkillId | null) => void;
   addConversation: (c: Conversation) => void;
   setConversations: (list: Conversation[]) => void;
+  /** 按 id 更新单个会话（用于轮询预览状态等） */
+  updateConversation: (id: string, data: Partial<Conversation>) => void;
   addMessage: (conversationId: string, message: Message) => void;
   setMessages: (conversationId: string, messages: Message[]) => void;
   startNewChat: () => void;
@@ -49,6 +51,13 @@ export const useChatStore = create<ChatState>()(
         })),
 
       setConversations: (list) => set({ conversations: list }),
+
+      updateConversation: (id, data) =>
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === id ? { ...c, ...data } : c
+          ),
+        })),
 
       addMessage: (conversationId, message) =>
         set((state) => {

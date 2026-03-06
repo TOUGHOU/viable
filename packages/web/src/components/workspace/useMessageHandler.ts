@@ -4,12 +4,19 @@
  */
 
 import { useEffect, useState } from 'react';
-import { MESSAGE_TYPES } from '@vibe/utils-inspector/shared';
-import type { ElementData, ErrorInfo } from '@vibe/utils-inspector/shared';
+import { MESSAGE_TYPES } from '@jd/vibe-inspector-plugin/shared';
+import type { ElementData, ErrorInfo } from '@jd/vibe-inspector-plugin/shared';
 import type { UseMessageHandlerOptions } from './inspector.types';
 
 export function useMessageHandler(options: UseMessageHandlerOptions) {
-  const { iframeRef, onElementSelect, inspectorActive, onErrorDetected, onScrollUpdate, onDropEnd } = options;
+  const {
+    iframeRef,
+    onElementSelect,
+    inspectorActive,
+    onErrorDetected,
+    onScrollUpdate,
+    onDropEnd,
+  } = options;
 
   const [selectedElement, setSelectedElement] = useState<ElementData | null>(null);
   const [detectedErrors, setDetectedErrors] = useState<ErrorInfo[]>([]);

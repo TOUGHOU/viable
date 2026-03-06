@@ -26,11 +26,18 @@ const DEVICE_MAX_HEIGHT: Record<DeviceType, string | undefined> = {
 
 export interface PreviewCodePanelProps {
   previewUrl?: string | null;
+  /** 预览状态：pending 启动中，running 已就绪，failed 启动失败 */
+  previewStatus?: 'pending' | 'running' | 'failed';
   codeFiles?: { path: string; content?: string }[];
   className?: string;
 }
 
-export function PreviewCodePanel({ previewUrl, codeFiles = [], className }: PreviewCodePanelProps) {
+export function PreviewCodePanel({
+  previewUrl,
+  previewStatus,
+  codeFiles = [],
+  className,
+}: PreviewCodePanelProps) {
   const activeTab = useWorkspaceStore((s) => s.activeTab);
   const deviceType = useWorkspaceStore((s) => s.deviceType);
   const setPreviewUrl = useWorkspaceStore((s) => s.setPreviewUrl);
@@ -42,6 +49,10 @@ export function PreviewCodePanel({ previewUrl, codeFiles = [], className }: Prev
 
   const previewMaxWidth = DEVICE_MAX_WIDTH[deviceType];
   const previewMaxHeight = DEVICE_MAX_HEIGHT[deviceType];
+
+  const isPending = previewStatus === 'pending';
+  const isFailed = previewStatus === 'failed';
+  const showFrame = previewUrl && previewStatus === 'running';
 
   return (
     <div className={cn('flex h-full flex-col rounded-md', className)}>
@@ -60,7 +71,22 @@ export function PreviewCodePanel({ previewUrl, codeFiles = [], className }: Prev
                   : undefined
               }
             >
-              <PreviewFrame src="http://localhost:9876/" className="h-full w-full" />
+              {isPending ? (
+                <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground">
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  <span className="text-sm">预览启动中…</span>
+                </div>
+              ) : isFailed ? (
+                <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-destructive">
+                  <span className="text-sm">预览启动失败</span>
+                </div>
+              ) : (
+                <PreviewFrame
+                  src={showFrame ? previewUrl : null}
+                  isLoading={false}
+                  className="h-full w-full"
+                />
+              )}
             </div>
           </div>
         ) : (

@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { MESSAGE_TYPES } from '@vibe/utils-inspector/shared';
+import { MESSAGE_TYPES } from '@jd/vibe-inspector-plugin/shared';
 import type { UseIframeManagerOptions } from './inspector.types';
 
 export function useIframeManager(options: UseIframeManagerOptions) {
@@ -32,7 +32,7 @@ export function useIframeManager(options: UseIframeManagerOptions) {
         console.error('[PreviewFrame] Cannot communicate with iframe:', error);
       }
     },
-    [iframeRef],
+    [iframeRef]
   );
 
   const refreshIframe = useCallback(() => {

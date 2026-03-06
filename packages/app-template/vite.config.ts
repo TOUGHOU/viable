@@ -5,7 +5,7 @@
 import path from 'path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import inspectorPlugin from '@vibe/utils-inspector';
+import inspectorPlugin from '@jd/vibe-inspector-plugin';
 
 export default defineConfig({
   plugins: [react(), inspectorPlugin({ bundler: 'vite' })],

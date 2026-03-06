@@ -4,6 +4,7 @@
  */
 
 import { create } from 'zustand';
+import type { SelectedElement } from '@/types/chat';
 
 export type PreviewCodeTab = 'preview' | 'code';
 
@@ -18,22 +19,27 @@ interface WorkspaceState {
   deviceType: DeviceType;
   /** 预览 iframe 的 URL，可选，由外部设置 */
   previewUrl: string | null;
+  /** 预览中选中的元素列表，发送消息时会带给接口 */
+  selectedElements: SelectedElement[];
   setActiveTab: (tab: PreviewCodeTab) => void;
   setInspectorActive: (value: boolean) => void;
   toggleInspectorActive: () => void;
   setDeviceType: (device: DeviceType) => void;
   setPreviewUrl: (url: string | null) => void;
+  setSelectedElements: (elements: SelectedElement[]) => void;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   activeTab: 'preview',
-  inspectorActive: true,
+  inspectorActive: false,
   deviceType: 'desktop',
   previewUrl: null,
+  selectedElements: [],
 
   setActiveTab: (tab) => set({ activeTab: tab }),
   setInspectorActive: (value) => set({ inspectorActive: value }),
   toggleInspectorActive: () => set((state) => ({ inspectorActive: !state.inspectorActive })),
   setDeviceType: (device) => set({ deviceType: device }),
   setPreviewUrl: (url) => set({ previewUrl: url }),
+  setSelectedElements: (elements) => set({ selectedElements: elements }),
 }));

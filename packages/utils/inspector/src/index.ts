@@ -35,7 +35,7 @@ export { CoreTransformer } from './transform/core/transformer';
  *
  * @example Vite
  * ```ts
- * import { inspectorPlugin } from '@vibe/utils-inspector'
+ * import { inspectorPlugin } from '@jd/vibe-inspector-plugin'
  * export default defineConfig({
  *   plugins: [inspectorPlugin({ bundler: 'vite' })]
  * })
@@ -43,7 +43,7 @@ export { CoreTransformer } from './transform/core/transformer';
  *
  * @example Turbopack / Next.js >= 15.3
  * ```ts
- * import { inspectorPlugin } from '@vibe/utils-inspector'
+ * import { inspectorPlugin } from '@jd/vibe-inspector-plugin'
  * const nextConfig = {
  *   turbopack: {
  *     rules: inspectorPlugin({ bundler: 'turbopack' })
@@ -62,7 +62,9 @@ export default function inspectorPlugin(options: InspectorOptions): any {
       return createTurbopackRules(pluginOptions);
     default: {
       const _exhaustive: string = bundler;
-      throw new Error(`[InspectorPlugin] 不支持的 bundler: "${_exhaustive}"，当前支持: "vite" | "turbopack"`);
+      throw new Error(
+        `[InspectorPlugin] 不支持的 bundler: "${_exhaustive}"，当前支持: "vite" | "turbopack"`
+      );
     }
   }
 }

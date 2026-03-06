@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import type { ElementData } from '@vibe/utils-inspector/shared';
+import type { ElementData } from '@jd/vibe-inspector-plugin/shared';
 
 export interface SideBarOverlayProps {
   selectedElement: ElementData | null;
@@ -105,7 +105,9 @@ export function SideBarOverlay({
           data-side-bar="left"
           className="absolute left-0 z-[9999] pointer-events-auto"
           style={{
-            ...(position.bottom !== undefined ? { bottom: position.bottom } : { top: position.top }),
+            ...(position.bottom !== undefined
+              ? { bottom: position.bottom }
+              : { top: position.top }),
           }}
         >
           {leftBar}
@@ -117,7 +119,9 @@ export function SideBarOverlay({
           data-side-bar="right"
           className="absolute right-0 z-[9999] pointer-events-auto"
           style={{
-            ...(position.bottom !== undefined ? { bottom: position.bottom } : { top: position.top }),
+            ...(position.bottom !== undefined
+              ? { bottom: position.bottom }
+              : { top: position.top }),
           }}
         >
           {rightBar}

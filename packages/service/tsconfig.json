@@ -17,5 +17,9 @@
     "strictBindCallApply": true,
     "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": true
+  },
+  "exclude": ["node_modules", "dist", "data"],
+  "watchOptions": {
+    "excludeDirectories": ["**/node_modules", "**/dist", "**/data"]
   }
 }

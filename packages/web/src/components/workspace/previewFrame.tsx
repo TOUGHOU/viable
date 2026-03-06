@@ -7,7 +7,8 @@
 
 import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import type { ElementData } from '@vibe/utils-inspector/shared';
+import type { ElementData } from '@jd/vibe-inspector-plugin/shared';
+import type { SelectedElement } from '@/types/chat';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { useIframeManager } from './useIframeManager';
 import { useMessageHandler } from './useMessageHandler';
@@ -29,14 +30,7 @@ export interface PreviewFrameProps {
 
 export const PreviewFrame = forwardRef<HTMLIFrameElement, PreviewFrameProps>(
   (
-    {
-      src,
-      isLoading: externalLoading = false,
-      onLoad,
-      onDrop,
-      onElementSelect,
-      className,
-    },
+    { src, isLoading: externalLoading = false, onLoad, onDrop, onElementSelect, className },
     ref
   ) => {
     const inspectorActive = useWorkspaceStore((s) => s.inspectorActive);
@@ -45,7 +39,7 @@ export const PreviewFrame = forwardRef<HTMLIFrameElement, PreviewFrameProps>(
     const [errorMessage, setErrorMessage] = useState('');
     const [retryCount, setRetryCount] = useState(0);
     // eslint-disable-next-line @typescript-eslint/no-unused-vars -- setScrollRect used by useMessageHandler
-    const [scrollRect, setScrollRect] = useState<{
+    const [_scrollRect, setScrollRect] = useState<{
       top: number;
       left: number;
       right: number;
@@ -74,10 +68,14 @@ export const PreviewFrame = forwardRef<HTMLIFrameElement, PreviewFrameProps>(
       [onDrop]
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- hook returns selectedElement for side effects
-    const { selectedElement } = useMessageHandler({
+    const { selectedElement: _selectedElement } = useMessageHandler({
       iframeRef,
-      onElementSelect,
+      onElementSelect: (elementInfo) => {
+        const setSelectedElements = useWorkspaceStore.getState().setSelectedElements;
+        const el = elementInfo as SelectedElement | null;
+        setSelectedElements(el ? [el] : []);
+        onElementSelect?.(elementInfo);
+      },
       inspectorActive,
       onScrollUpdate: setScrollRect,
       onDropEnd,

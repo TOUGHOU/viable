@@ -11,6 +11,7 @@ import type {
   Conversation,
   Message,
   PaginationMeta,
+  PreviewStatus,
 } from './chat-storage.interface';
 
 const CONVERSATIONS_FILE = 'conversations.json';
@@ -70,6 +71,7 @@ export class ChatFileStorage implements IChatStorage {
       title: data.title ?? '新对话',
       updatedAt: now,
       hasPreview: data.hasPreview ?? false,
+      previewStatus: 'pending',
     };
     list.unshift(conversation);
     await this.writeJson(conversationsPath, list);
@@ -107,7 +109,13 @@ export class ChatFileStorage implements IChatStorage {
 
   async updateConversation(
     id: string,
-    data: { title?: string; hasPreview?: boolean }
+    data: {
+      title?: string;
+      hasPreview?: boolean;
+      previewPort?: number;
+      previewUrl?: string;
+      previewStatus?: PreviewStatus;
+    }
   ): Promise<Conversation | null> {
     const conversationsPath = this.getConversationsPath();
     const list = await this.readJson<Conversation[]>(conversationsPath, []);
@@ -118,6 +126,9 @@ export class ChatFileStorage implements IChatStorage {
       ...list[idx],
       ...(data.title !== undefined && { title: data.title }),
       ...(data.hasPreview !== undefined && { hasPreview: data.hasPreview }),
+      ...(data.previewPort !== undefined && { previewPort: data.previewPort }),
+      ...(data.previewUrl !== undefined && { previewUrl: data.previewUrl }),
+      ...(data.previewStatus !== undefined && { previewStatus: data.previewStatus }),
       updatedAt: now,
     };
     await this.writeJson(conversationsPath, list);

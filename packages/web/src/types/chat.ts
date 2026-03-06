@@ -17,6 +17,12 @@ export interface Conversation {
   updatedAt: string;
   hasPreview: boolean;
   unread?: number;
+  /** 预览端口，本期为 localhost */
+  previewPort?: number;
+  /** 预览地址，本期为 http://localhost:${previewPort} */
+  previewUrl?: string;
+  /** 预览状态：pending 启动中，running 已就绪，failed 启动失败 */
+  previewStatus?: 'pending' | 'running' | 'failed';
 }
 
 export type MessageRole = 'user' | 'assistant';
@@ -26,6 +32,26 @@ export type MessageContentFormat = 'text' | 'markdown';
 
 /** 发送/流式状态，仅前端使用，不持久化、不通过 API 同步 */
 export type MessageStatus = 'sending' | 'sent' | 'streaming' | 'failed';
+
+/** 预览中选中的元素，与 Inspector 上报结构一致，发送消息时带给接口 */
+export interface SelectedElement {
+  id: string;
+  name: string;
+  type: string;
+  filePath: string;
+  fileName: string;
+  lineNumber: number;
+  col: number;
+  floorId?: string;
+  rect: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    right: number;
+    bottom: number;
+  };
+}
 
 export interface Message {
   id: string;
@@ -38,6 +64,19 @@ export interface Message {
   model?: string;
   /** 扩展信息：token 用量、finish_reason 等，按需定义 */
   metadata?: Record<string, unknown>;
+}
+
+/** 流式阶段：思考 / 工具调用中 / 输出内容 / 结束 */
+export type StreamPhase = 'thinking' | 'tool_calls' | 'content' | 'done';
+
+/** 单次工具调用状态（流式展示用） */
+export interface StreamToolCall {
+  id: string;
+  name: string;
+  status: 'running' | 'done';
+  arguments?: Record<string, unknown>;
+  success?: boolean;
+  resultSummary?: string;
 }
 
 export const SKILLS: SkillItem[] = [];

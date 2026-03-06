@@ -95,7 +95,11 @@ export class ChatController {
   @Post('sendMessage')
   @HttpCode(HttpStatus.OK)
   sendMessage(@Body() dto: SendMessageRequestDto) {
-    return this.chatService.sendMessage(dto.conversationId, dto.content);
+    return this.chatService.sendMessage({
+      conversationId: dto.conversationId,
+      content: dto.content,
+      selectedElements: dto.selectedElements,
+    });
   }
 
   @Post('sendMessageStream')
@@ -103,10 +107,10 @@ export class ChatController {
     @Body() dto: SendMessageRequestDto,
     @Res({ passthrough: false }) res: Response
   ) {
-    await this.chatService.sendMessageStream(
-      res,
-      dto.conversationId,
-      dto.content
-    );
+    await this.chatService.sendMessageStream(res, {
+      conversationId: dto.conversationId,
+      content: dto.content,
+      selectedElements: dto.selectedElements,
+    });
   }
 }

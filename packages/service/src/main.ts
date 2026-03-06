@@ -2,6 +2,12 @@
  * @file: main.ts
  * @author: houfujian houfujian@jd.com
  */
+import { config } from 'dotenv';
+
+// 先加载 .env，再加载 .env.local（存在则覆盖），保证本地开发能读到 .env.local
+config();
+config({ path: '.env.local', override: true });
+
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';

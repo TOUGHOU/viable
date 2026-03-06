@@ -8,7 +8,7 @@ import type { InspectorPluginOptions } from '../../shared/types';
 import { createRuntimeBootstrapCode } from '../../shared/utils';
 import { CoreTransformer } from '../../transform/core/transformer';
 
-const RUNTIME_MODULE_ID = '@vibe/utils-inspector/runtime/inject';
+const RUNTIME_MODULE_ID = '@jd/vibe-inspector-plugin/runtime/inject';
 
 function isProvidersFile(resourcePath: string): boolean {
   const normalized = path.normalize(resourcePath);
@@ -19,14 +19,14 @@ function isProvidersFile(resourcePath: string): boolean {
 function injectRuntimeIntoProviders(
   code: string,
   resourcePath: string,
-  runtimeConfig: InspectorPluginOptions['runtime'],
+  runtimeConfig: InspectorPluginOptions['runtime']
 ): string {
   if (!isProvidersFile(resourcePath)) {
     return code;
   }
   const hasInspectorImport =
-    code.includes("from '@vibe/utils-inspector/runtime/inject'") ||
-    code.includes('from "@vibe/utils-inspector/runtime/inject"') ||
+    code.includes("from '@jd/vibe-inspector-plugin/runtime/inject'") ||
+    code.includes('from "@jd/vibe-inspector-plugin/runtime/inject"') ||
     code.includes('__inspectorRuntime');
   if (hasInspectorImport) {
     return code;
@@ -61,7 +61,7 @@ export default function inspectorTurbopackLoader(
     rootContext?: string;
     resourcePath: string;
   },
-  source: string,
+  source: string
 ): string | undefined {
   const options = this.getOptions?.() ?? {};
   const { transform: transformConfig = {}, runtime: runtimeConfig = {} } = options;

@@ -52,6 +52,15 @@ export default {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
   			sm: 'calc(var(--radius) - 4px)'
+  		},
+  		keyframes: {
+  			thinking: {
+  				'0%, 60%, 100%': { opacity: '0.4' },
+  				'30%': { opacity: '1' }
+  			}
+  		},
+  		animation: {
+  			thinking: 'thinking 1.4s ease-in-out infinite'
   		}
   	}
   },

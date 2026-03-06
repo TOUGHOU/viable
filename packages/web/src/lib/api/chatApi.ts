@@ -4,7 +4,7 @@
  * @description 对话相关 API，统一 POST，baseURL 由环境变量或默认值
  */
 
-import type { Conversation, Message } from '@/types/chat';
+import type { Conversation, Message, SelectedElement, StreamPhase } from '@/types/chat';
 
 const BASE_URL =
   (typeof import.meta !== 'undefined' &&
@@ -86,6 +86,9 @@ export async function updateConversation(body: {
   id: string;
   title?: string;
   hasPreview?: boolean;
+  previewPort?: number;
+  previewUrl?: string;
+  previewStatus?: 'pending' | 'running' | 'failed';
 }): Promise<Conversation> {
   return request<Conversation>('/chat/updateConversation', body);
 }
@@ -126,15 +129,19 @@ export interface SendMessageResult {
 export async function sendMessage(body: {
   conversationId: string;
   content: string;
+  selectedElements?: SelectedElement[];
 }): Promise<SendMessageResult> {
   return request<SendMessageResult>('/chat/sendMessage', body);
 }
 
 export async function sendMessageStream(
-  body: { conversationId: string; content: string },
+  body: { conversationId: string; content: string; selectedElements?: SelectedElement[] },
   callbacks: {
     onUserMessage?: (message: Message) => void;
     onContent?: (chunk: string) => void;
+    onStatus?: (phase: StreamPhase) => void;
+    onToolCallStart?: (payload: { id: string; name: string; arguments: Record<string, unknown> }) => void;
+    onToolCallEnd?: (payload: { id: string; name: string; success: boolean; resultSummary?: string }) => void;
     onAssistantMessage?: (message: Message) => void;
     onError?: (message: string) => void;
   }
@@ -178,6 +185,15 @@ export async function sendMessageStream(
         } catch {
           callbacks.onContent(data);
         }
+      } else if (currentEvent === 'status' && callbacks.onStatus) {
+        const obj = JSON.parse(data) as { phase: StreamPhase };
+        callbacks.onStatus(obj.phase);
+      } else if (currentEvent === 'tool_call_start' && callbacks.onToolCallStart) {
+        const obj = JSON.parse(data) as { id: string; name: string; arguments: Record<string, unknown> };
+        callbacks.onToolCallStart(obj);
+      } else if (currentEvent === 'tool_call_end' && callbacks.onToolCallEnd) {
+        const obj = JSON.parse(data) as { id: string; name: string; success: boolean; resultSummary?: string };
+        callbacks.onToolCallEnd(obj);
       } else if (currentEvent === 'assistant_message' && callbacks.onAssistantMessage) {
         callbacks.onAssistantMessage(JSON.parse(data) as Message);
       } else if (currentEvent === 'error' && callbacks.onError) {

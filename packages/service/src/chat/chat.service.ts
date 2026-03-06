@@ -10,8 +10,10 @@ import type {
   IChatStorage,
   Conversation,
   Message,
+  PreviewStatus,
 } from './storage/chat-storage.interface';
 import { LlmService } from '../llm/llm.service';
+import { PreviewService } from '../preview/preview.service';
 
 function createId(): string {
   return Math.random().toString(36).slice(2, 11);
@@ -21,14 +23,17 @@ function createId(): string {
 export class ChatService {
   constructor(
     @Inject('IChatStorage') private readonly storage: IChatStorage,
-    private readonly llmService: LlmService
+    private readonly llmService: LlmService,
+    private readonly previewService: PreviewService
   ) {}
 
   async createConversation(data: {
     title?: string;
     hasPreview?: boolean;
   }): Promise<Conversation> {
-    return this.storage.createConversation(data);
+    const conversation = await this.storage.createConversation(data);
+    this.previewService.setupPreview(conversation.id);
+    return conversation;
   }
 
   async getConversations(params: {
@@ -49,7 +54,13 @@ export class ChatService {
 
   async updateConversation(
     id: string,
-    data: { title?: string; hasPreview?: boolean }
+    data: {
+      title?: string;
+      hasPreview?: boolean;
+      previewPort?: number;
+      previewUrl?: string;
+      previewStatus?: PreviewStatus;
+    }
   ): Promise<Conversation> {
     const conv = await this.storage.updateConversation(id, data);
     if (!conv) throw new NotFoundException('会话不存在');
@@ -57,6 +68,7 @@ export class ChatService {
   }
 
   async deleteConversation(id: string): Promise<{ success: boolean }> {
+    await this.previewService.stopPreview(id);
     const ok = await this.storage.deleteConversation(id);
     if (!ok) throw new NotFoundException('会话不存在');
     return { success: true };
@@ -107,11 +119,23 @@ export class ChatService {
     return { success: true };
   }
 
-  async sendMessage(
-    conversationId: string,
-    content: string
-  ): Promise<{ userMessage: Message; assistantMessage: Message }> {
-    await this.getConversation(conversationId);
+  async sendMessage(params: {
+    conversationId: string;
+    content: string;
+    selectedElements?: Array<{
+      id: string;
+      name: string;
+      type: string;
+      filePath: string;
+      fileName: string;
+      lineNumber: number;
+      col: number;
+      floorId?: string;
+      rect: { left: number; top: number; width: number; height: number; right: number; bottom: number };
+    }>;
+  }): Promise<{ userMessage: Message; assistantMessage: Message }> {
+    const { conversationId, content, selectedElements } = params;
+    const conv = await this.getConversation(conversationId);
     const { data: history } = await this.storage.getMessages(conversationId, {
       page: 1,
       pageSize: 50,
@@ -128,7 +152,18 @@ export class ChatService {
     };
     await this.storage.addMessage(conversationId, userMessage);
 
-    const assistantContent = await this.llmService.chat(content, history);
+    const workspaceRoot = conv.previewUrl
+      ? this.previewService.getPreviewDir(conversationId)
+      : undefined;
+    let assistantContent = '';
+    for await (const event of this.llmService.streamChat({
+      content,
+      history,
+      workspaceRoot,
+      selectedElements,
+    })) {
+      if (event.type === 'content') assistantContent += event.chunk;
+    }
 
     const assistantMessage: Message = {
       id: createId(),
@@ -147,10 +182,24 @@ export class ChatService {
 
   async sendMessageStream(
     res: Response,
-    conversationId: string,
-    content: string
+    params: {
+      conversationId: string;
+      content: string;
+      selectedElements?: Array<{
+        id: string;
+        name: string;
+        type: string;
+        filePath: string;
+        fileName: string;
+        lineNumber: number;
+        col: number;
+        floorId?: string;
+        rect: { left: number; top: number; width: number; height: number; right: number; bottom: number };
+      }>;
+    }
   ): Promise<void> {
-    await this.getConversation(conversationId);
+    const { conversationId, content, selectedElements } = params;
+    const conv = await this.getConversation(conversationId);
     const { data: history } = await this.storage.getMessages(conversationId, {
       page: 1,
       pageSize: 50,
@@ -185,11 +234,41 @@ export class ChatService {
 
     sendEvent('user_message', userMessage);
 
+    const workspaceRoot = conv.previewUrl
+      ? this.previewService.getPreviewDir(conversationId)
+      : undefined;
     let fullContent = '';
     try {
-      for await (const chunk of this.llmService.streamChat(content, history)) {
-        fullContent += chunk;
-        sendEvent('content', chunk);
+      for await (const event of this.llmService.streamChat({
+        content,
+        history,
+        workspaceRoot,
+        selectedElements,
+      })) {
+        switch (event.type) {
+          case 'content':
+            fullContent += event.chunk;
+            sendEvent('content', event.chunk);
+            break;
+          case 'status':
+            sendEvent('status', { phase: event.phase });
+            break;
+          case 'tool_call_start':
+            sendEvent('tool_call_start', {
+              id: event.id,
+              name: event.name,
+              arguments: event.arguments,
+            });
+            break;
+          case 'tool_call_end':
+            sendEvent('tool_call_end', {
+              id: event.id,
+              name: event.name,
+              success: event.success,
+              resultSummary: event.resultSummary,
+            });
+            break;
+        }
       }
     } catch (err) {
       const message =
