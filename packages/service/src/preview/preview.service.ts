@@ -25,8 +25,10 @@ export class PreviewService {
 
   constructor(@Inject('IChatStorage') private readonly storage: IChatStorage) {
     this.previewRoot = process.env.PREVIEW_ROOT ?? path.resolve(process.cwd(), 'data', 'preview');
+    // 模板已移至 monorepo 根目录 app-template，相对 service 编译输出 dist/preview 的上一级 repo 根目录
+    const repoRoot = path.resolve(__dirname, '..', '..', '..');
     this.templatePath =
-      process.env.PREVIEW_TEMPLATE_PATH ?? path.resolve(process.cwd(), '..', 'app-template');
+      process.env.PREVIEW_TEMPLATE_PATH ?? path.join(repoRoot, 'app-template');
     this.portStart = parseInt(process.env.PREVIEW_PORT_START ?? String(DEFAULT_PORT_START), 10);
     this.portEnd = parseInt(process.env.PREVIEW_PORT_END ?? String(DEFAULT_PORT_END), 10);
   }
