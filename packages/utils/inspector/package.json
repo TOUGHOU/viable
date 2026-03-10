@@ -1,6 +1,6 @@
 {
-  "name": "@jd/vibe-inspector-plugin",
-  "version": "0.0.2",
+  "name": "vibe-inspector-plugin",
+  "version": "0.0.3",
   "description": "Vibe Coding Inspector Plugin - JSX 转换、运行时选择/拖拽、Vite/Turbopack 适配器",
   "type": "module",
   "main": "./dist/index.cjs",

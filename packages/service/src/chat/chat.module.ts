@@ -7,10 +7,11 @@ import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
 import { ChatFileStorage } from './storage/chat.file.storage';
 import { LlmModule } from '../llm/llm.module';
+import { PreviewModule } from '../preview/preview.module';
 import { PreviewService } from '../preview/preview.service';
 
 @Module({
-  imports: [LlmModule],
+  imports: [LlmModule, PreviewModule],
   controllers: [ChatController],
   providers: [
     PreviewService,

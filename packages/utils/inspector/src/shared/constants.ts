@@ -1,7 +1,9 @@
 /**
- * @file constants.ts
+ * @file: constants.ts
  * @description 全局常量定义
  */
+
+export const MODULE_NAME = 'vibe-inspector-plugin';
 
 export const NAME_SPACE = 'sc';
 

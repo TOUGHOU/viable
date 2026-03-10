@@ -1,5 +1,5 @@
 /**
- * @file plugin.ts
+ * @file: plugin.ts
  * @description Vite 插件适配器
  */
 
@@ -9,6 +9,7 @@ import type { Plugin, ResolvedConfig } from 'vite';
 import type { InspectorPluginOptions } from '../../shared/types';
 import { createRuntimeBootstrapCode } from '../../shared/utils';
 import { CoreTransformer } from '../../transform/core/transformer';
+import { MODULE_NAME } from '../../shared/constants';
 
 /** 使用 HTTP 路径避免浏览器将 virtual: 当作非法 scheme 触发 CORS */
 const RUNTIME_PUBLIC_PATH = '/@vibe-inspector/runtime';
@@ -48,7 +49,7 @@ export function createVitePlugin(options: InspectorPluginOptions = {}): Plugin {
       transformer = new CoreTransformer(transformConfig, config.root);
 
       const req = createRequire(path.join(config.root, 'package.json'));
-      const pkgMain = req.resolve('@jd/vibe-inspector-plugin');
+      const pkgMain = req.resolve(MODULE_NAME);
       runtimeFilePath = path.join(path.dirname(pkgMain), 'runtime/inject.js');
     },
 

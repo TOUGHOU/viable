@@ -154,6 +154,9 @@ importers:
 
   packages/service:
     dependencies:
+      '@e2b/code-interpreter':
+        specifier: ^2.3.3
+        version: 2.3.3
       '@nestjs/common':
         specifier: ^10.3.0
         version: 10.4.22(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -166,6 +169,9 @@ importers:
       '@prisma/client':
         specifier: ^7.0.0
         version: 7.4.1(prisma@7.3.0)(typescript@5.9.3)
+      '@types/fs-extra':
+        specifier: ^11.0.4
+        version: 11.0.4
       class-transformer:
         specifier: ^0.5.1
         version: 0.5.1
@@ -178,6 +184,9 @@ importers:
       e2b:
         specifier: ^2.12.0
         version: 2.12.0
+      fs-extra:
+        specifier: ^11.3.4
+        version: 11.3.4
       openai:
         specifier: ^6.25.0
         version: 6.25.0
@@ -690,6 +699,13 @@ packages:
       '@bufbuild/protobuf': ^2.2.0
     dependencies:
       '@bufbuild/protobuf': 2.11.0
+    dev: false
+
+  /@e2b/code-interpreter@2.3.3:
+    resolution: {integrity: sha1-guZGjQ8eDYr5ryTyd335LEoekbo=, tarball: http://registry.m.jd.com/@e2b/code-interpreter/download/@e2b/code-interpreter-2.3.3.tgz}
+    engines: {node: '>=20'}
+    dependencies:
+      e2b: 2.12.0
     dev: false
 
   /@electric-sql/pglite-socket@0.0.20(@electric-sql/pglite@0.3.15):
@@ -2434,6 +2450,13 @@ packages:
       '@types/serve-static': 1.15.10
     dev: true
 
+  /@types/fs-extra@11.0.4:
+    resolution: {integrity: sha1-4WqGO7iEP7qMUAQ2K1pz4XvsykU=, tarball: http://registry.m.jd.com/@types/fs-extra/download/@types/fs-extra-11.0.4.tgz}
+    dependencies:
+      '@types/jsonfile': 6.1.4
+      '@types/node': 24.11.0
+    dev: false
+
   /@types/hast@3.0.4:
     resolution: {integrity: sha1-HWs5mTuCzqateDlFsFCMJZA+Fao=, tarball: http://registry.m.jd.com/@types/hast/download/@types/hast-3.0.4.tgz}
     dependencies:
@@ -2447,6 +2470,12 @@ packages:
   /@types/json-schema@7.0.15:
     resolution: {integrity: sha1-WWoXRyM2lNUPatinhp/Lb1bPWEE=, tarball: http://registry.m.jd.com/@types/json-schema/download/@types/json-schema-7.0.15.tgz}
     dev: true
+
+  /@types/jsonfile@6.1.4:
+    resolution: {integrity: sha1-YUr+waEWTn1nC0p61k3z5763twI=, tarball: http://registry.m.jd.com/@types/jsonfile/download/@types/jsonfile-6.1.4.tgz}
+    dependencies:
+      '@types/node': 24.11.0
+    dev: false
 
   /@types/marked-terminal@3.1.7:
     resolution: {integrity: sha1-ULCipc82Ev3dqupvTuw+nZaBNBE=, tarball: http://registry.m.jd.com/@types/marked-terminal/download/@types/marked-terminal-3.1.7.tgz}
@@ -4496,6 +4525,15 @@ packages:
       universalify: 2.0.1
     dev: true
 
+  /fs-extra@11.3.4:
+    resolution: {integrity: sha1-q2k07Ki89vf2uCdC4zWR+GMB1vw=, tarball: http://registry.m.jd.com/fs-extra/download/fs-extra-11.3.4.tgz}
+    engines: {node: '>=14.14'}
+    dependencies:
+      graceful-fs: 4.2.11
+      jsonfile: 6.2.0
+      universalify: 2.0.1
+    dev: false
+
   /fs-extra@7.0.1:
     resolution: {integrity: sha1-TxicRKoSO4lfcigE9V6iPq3DSOk=, tarball: http://registry.m.jd.com/fs-extra/download/fs-extra-7.0.1.tgz}
     engines: {node: '>=6 <7 || >=8'}
@@ -5144,7 +5182,6 @@ packages:
       universalify: 2.0.1
     optionalDependencies:
       graceful-fs: 4.2.11
-    dev: true
 
   /keyv@4.5.4:
     resolution: {integrity: sha1-qHmpnilFL5QkOfKkBeOvizHU3pM=, tarball: http://registry.m.jd.com/keyv/download/keyv-4.5.4.tgz}
@@ -7370,7 +7407,6 @@ packages:
   /universalify@2.0.1:
     resolution: {integrity: sha1-Fo78IYCWTmOG0GHglN9hr+I5sY0=, tarball: http://registry.m.jd.com/universalify/download/universalify-2.0.1.tgz}
     engines: {node: '>= 10.0.0'}
-    dev: true
 
   /unpipe@1.0.0:
     resolution: {integrity: sha1-sr9O6FFKrmFltIF4KdIbLvSZBOw=, tarball: http://registry.m.jd.com/unpipe/download/unpipe-1.0.0.tgz}

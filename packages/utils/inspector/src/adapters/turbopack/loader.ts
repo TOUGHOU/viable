@@ -1,5 +1,5 @@
 /**
- * @file loader.ts
+ * @file: loader.ts
  * @description Turbopack loader - 在 TSX/JSX 中注入 Inspector 转换与运行时
  */
 
@@ -7,8 +7,9 @@ import path from 'node:path';
 import type { InspectorPluginOptions } from '../../shared/types';
 import { createRuntimeBootstrapCode } from '../../shared/utils';
 import { CoreTransformer } from '../../transform/core/transformer';
+import { MODULE_NAME } from '../../shared/constants';
 
-const RUNTIME_MODULE_ID = '@jd/vibe-inspector-plugin/runtime/inject';
+const RUNTIME_MODULE_ID = `${MODULE_NAME}/runtime/inject`;
 
 function isProvidersFile(resourcePath: string): boolean {
   const normalized = path.normalize(resourcePath);
@@ -25,8 +26,8 @@ function injectRuntimeIntoProviders(
     return code;
   }
   const hasInspectorImport =
-    code.includes("from '@jd/vibe-inspector-plugin/runtime/inject'") ||
-    code.includes('from "@jd/vibe-inspector-plugin/runtime/inject"') ||
+    code.includes(`from '${MODULE_NAME}/runtime/inject'`) ||
+    code.includes(`from "${MODULE_NAME}/runtime/inject"`) ||
     code.includes('__inspectorRuntime');
   if (hasInspectorImport) {
     return code;

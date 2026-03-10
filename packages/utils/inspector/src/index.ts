@@ -1,5 +1,5 @@
 /**
- * @file index.ts
+ * @file: index.ts
  * @description Inspector 统一入口，通过 bundler 参数选择适配器
  */
 
@@ -35,7 +35,7 @@ export { CoreTransformer } from './transform/core/transformer';
  *
  * @example Vite
  * ```ts
- * import { inspectorPlugin } from '@jd/vibe-inspector-plugin'
+ * import { inspectorPlugin } from 'vibe-inspector-plugin'
  * export default defineConfig({
  *   plugins: [inspectorPlugin({ bundler: 'vite' })]
  * })
@@ -43,7 +43,7 @@ export { CoreTransformer } from './transform/core/transformer';
  *
  * @example Turbopack / Next.js >= 15.3
  * ```ts
- * import { inspectorPlugin } from '@jd/vibe-inspector-plugin'
+ * import { inspectorPlugin } from 'vibe-inspector-plugin'
  * const nextConfig = {
  *   turbopack: {
  *     rules: inspectorPlugin({ bundler: 'turbopack' })

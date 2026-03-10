@@ -1,7 +1,7 @@
 /**
  * @file tools.service.ts
  * @author houfujian houfujian@jd.com
- * @description Coding agent 工具：读/写文件、列目录、搜索代码、执行命令、获取当前时间
+ * @description Coding agent 工具：读/写文件、列目录、搜索代码、执行命令、获取当前时间；支持本地工作区与 E2B 沙箱工作区（e2b://conversationId）
  */
 
 import { Injectable } from '@nestjs/common';
@@ -9,9 +9,12 @@ import * as fs from 'fs/promises';
 import * as pathModule from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { SANDBOX_APP_PATH } from '../preview/sandbox.service';
+import { SandboxService } from '../preview/sandbox.service';
 
 const execAsync = promisify(exec);
 
+const E2B_PREFIX = 'e2b://';
 const SKIP_DIRS = new Set(['node_modules', '.git', '.vite', 'dist', '.turbo', '.next']);
 const MAX_SEARCH_FILE_SIZE = 512 * 1024; // 512KB
 const RUN_COMMAND_TIMEOUT_MS = 60_000;
@@ -20,6 +23,13 @@ export type ToolResult = { success: true; data: unknown } | { success: false; er
 
 @Injectable()
 export class ToolsService {
+  constructor(private readonly sandboxService: SandboxService) {}
+
+  private static parseE2BConversationId(workspaceRoot?: string): string | null {
+    if (!workspaceRoot || !workspaceRoot.startsWith(E2B_PREFIX)) return null;
+    return workspaceRoot.slice(E2B_PREFIX.length).trim() || null;
+  }
+
   private getWorkspaceRoot(override?: string): string {
     const base = override ?? process.env.WORKSPACE_ROOT ?? process.cwd();
     return pathModule.resolve(base);
@@ -35,6 +45,16 @@ export class ToolsService {
       throw new Error(`Path escapes workspace: ${relativePath}`);
     }
     return resolved;
+  }
+
+  /** 沙箱内路径：限制在 SANDBOX_APP_PATH 下 */
+  private resolveSandboxPath(relativePath: string): string {
+    const joined = pathModule.join(SANDBOX_APP_PATH, relativePath);
+    const normalized = pathModule.normalize(joined);
+    if (!normalized.startsWith(pathModule.normalize(SANDBOX_APP_PATH))) {
+      throw new Error(`Path escapes sandbox app: ${relativePath}`);
+    }
+    return normalized;
   }
 
   /**
@@ -58,6 +78,17 @@ export class ToolsService {
     filePath: string,
     workspaceRoot?: string
   ): Promise<ToolResult> {
+    const conversationId = ToolsService.parseE2BConversationId(workspaceRoot);
+    if (conversationId) {
+      try {
+        const resolved = this.resolveSandboxPath(filePath);
+        const content = await this.sandboxService.readFile(conversationId, resolved);
+        return { success: true, data: { path: resolved, content } };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { success: false, error: message };
+      }
+    }
     try {
       const root = this.getWorkspaceRoot(workspaceRoot);
       const resolved = this.resolveInWorkspace(root, filePath);
@@ -77,6 +108,17 @@ export class ToolsService {
     content: string,
     workspaceRoot?: string
   ): Promise<ToolResult> {
+    const conversationId = ToolsService.parseE2BConversationId(workspaceRoot);
+    if (conversationId) {
+      try {
+        const resolved = this.resolveSandboxPath(filePath);
+        await this.sandboxService.writeFile(conversationId, resolved, content);
+        return { success: true, data: { path: resolved, written: true } };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { success: false, error: message };
+      }
+    }
     try {
       const root = this.getWorkspaceRoot(workspaceRoot);
       const resolved = this.resolveInWorkspace(root, filePath);
@@ -96,6 +138,18 @@ export class ToolsService {
     dirPath?: string,
     workspaceRoot?: string
   ): Promise<ToolResult> {
+    const conversationId = ToolsService.parseE2BConversationId(workspaceRoot);
+    if (conversationId) {
+      try {
+        const dir = dirPath ?? '.';
+        const resolved = this.resolveSandboxPath(dir);
+        const { dirs, files } = await this.sandboxService.listDirectory(conversationId, resolved);
+        return { success: true, data: { path: resolved, dirs, files } };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { success: false, error: message };
+      }
+    }
     try {
       const dir = dirPath ?? '.';
       const root = this.getWorkspaceRoot(workspaceRoot);
@@ -147,6 +201,37 @@ export class ToolsService {
     filePattern?: string,
     workspaceRoot?: string
   ): Promise<ToolResult> {
+    const conversationId = ToolsService.parseE2BConversationId(workspaceRoot);
+    if (conversationId) {
+      try {
+        const scope = scopePath ? this.resolveSandboxPath(scopePath) : SANDBOX_APP_PATH;
+        const escaped = query.replace(/"/g, '\\"');
+        const { stdout } = await this.sandboxService.runCommand(
+          conversationId,
+          `grep -rn "${escaped}" "${scope}" 2>/dev/null || true`
+        );
+        const results: Array<{ path: string; line: number; content: string }> = [];
+        for (const raw of (stdout ?? '').trim().split('\n').filter(Boolean)) {
+          const m = raw.match(/:(\d+):(.*)$/);
+          if (!m) continue;
+          const pathStr = raw.slice(0, (m.index ?? 0));
+          const lineNum = parseInt(m[1], 10) || 1;
+          const content = m[2].trim();
+          results.push({
+            path: pathModule.relative(SANDBOX_APP_PATH, pathStr),
+            line: lineNum,
+            content,
+          });
+        }
+        return {
+          success: true,
+          data: { query, count: results.length, results: results.slice(0, 100) },
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { success: false, error: message };
+      }
+    }
     try {
       const root = this.getWorkspaceRoot(workspaceRoot);
       const scope = scopePath
@@ -220,6 +305,29 @@ export class ToolsService {
     cwd?: string,
     workspaceRoot?: string
   ): Promise<ToolResult> {
+    const conversationId = ToolsService.parseE2BConversationId(workspaceRoot);
+    if (conversationId) {
+      try {
+        const workDir = cwd ? this.resolveSandboxPath(cwd) : SANDBOX_APP_PATH;
+        const { stdout, stderr, exitCode } = await this.sandboxService.runCommandForTool(
+          conversationId,
+          command,
+          workDir
+        );
+        return {
+          success: true,
+          data: {
+            cwd: workDir,
+            stdout: stdout.trim(),
+            stderr: stderr.trim(),
+            exitCode,
+          },
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { success: false, error: message };
+      }
+    }
     try {
       const root = this.getWorkspaceRoot(workspaceRoot);
       const workDir = cwd ? this.resolveInWorkspace(root, cwd) : root;

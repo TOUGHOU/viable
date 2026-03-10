@@ -1,6 +1,6 @@
 /**
- * @file index.ts
- * @description 父页与 iframe 通信协议：供宿主从 @jd/vibe-inspector-plugin/shared 引用
+ * @file: index.ts
+ * @description 父页与 iframe 通信协议：供宿主从 vibe-inspector-plugin/shared 引用
  */
 
 export { MESSAGE_TYPES } from './constants';
