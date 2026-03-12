@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { MESSAGE_TYPES } from 'vibe-inspector-plugin/shared';
 import type { ElementData, ErrorInfo } from 'vibe-inspector-plugin/shared';
-import type { UseMessageHandlerOptions } from './inspector.types';
+import type { UseMessageHandlerOptions } from './types';
 
 export function useMessageHandler(options: UseMessageHandlerOptions) {
   const {

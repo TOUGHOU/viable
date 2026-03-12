@@ -114,6 +114,7 @@ export class ChatFileStorage implements IChatStorage {
       hasPreview?: boolean;
       previewPort?: number;
       previewUrl?: string;
+      sandboxId?: string;
       previewStatus?: PreviewStatus;
     }
   ): Promise<Conversation | null> {
@@ -128,6 +129,7 @@ export class ChatFileStorage implements IChatStorage {
       ...(data.hasPreview !== undefined && { hasPreview: data.hasPreview }),
       ...(data.previewPort !== undefined && { previewPort: data.previewPort }),
       ...(data.previewUrl !== undefined && { previewUrl: data.previewUrl }),
+      ...(data.sandboxId !== undefined && { sandboxId: data.sandboxId }),
       ...(data.previewStatus !== undefined && { previewStatus: data.previewStatus }),
       updatedAt: now,
     };

@@ -15,6 +15,8 @@ export interface Conversation {
   previewPort?: number;
   /** 预览地址，本期为 http://localhost:${previewPort} */
   previewUrl?: string;
+  /** E2B 沙箱 ID，用于重连或校验沙箱状态 */
+  sandboxId?: string;
   /** 预览状态：pending 启动中，running 已就绪，failed 启动失败 */
   previewStatus?: PreviewStatus;
 }
@@ -57,6 +59,7 @@ export interface IChatStorage {
       hasPreview?: boolean;
       previewPort?: number;
       previewUrl?: string;
+      sandboxId?: string;
       previewStatus?: PreviewStatus;
     }
   ): Promise<Conversation | null>;

@@ -245,7 +245,6 @@ export function ConversationPanel({
       {title && (
         <div className="relative flex h-12 items-center justify-between border-b border-border/80 px-4 py-2">
           <span className="truncate font-display text-sm font-medium text-foreground">{title}</span>
-          <span className="absolute bottom-0 left-0 h-px w-12 bg-accent/50" aria-hidden />
         </div>
       )}
       <div ref={listScrollRef} className="flex-1 overflow-y-auto min-h-0">

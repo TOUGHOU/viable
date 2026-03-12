@@ -33,9 +33,79 @@ export class SandboxService {
     }
     const sandbox = await Sandbox.create();
     this.sandboxMap.set(conversationId, sandbox);
-    const id = (sandbox as { sandboxId?: string }).sandboxId ?? 'unknown';
+    const id = this.getSandboxIdFromInstance(sandbox);
     console.log(`[Sandbox] ${conversationId} createSandbox: created sandboxId=${id}`);
     return sandbox;
+  }
+
+  /**
+   * 检查沙箱状态：若内存中已有该会话的沙箱则检查是否仍存活；若传入 existingSandboxId 且内存中无实例则尝试连接后检查
+   * @returns alive 是否存活，sandboxId 当前或检查的沙箱 id
+   */
+  async checkSandboxStatus(
+    conversationId: string,
+    existingSandboxId?: string
+  ): Promise<{ alive: boolean; sandboxId?: string }> {
+    const inMemory = this.sandboxMap.get(conversationId);
+    if (inMemory) {
+      try {
+        const running = await inMemory.isRunning();
+        const id = this.getSandboxIdFromInstance(inMemory);
+        return { alive: running, sandboxId: id };
+      } catch {
+        this.sandboxMap.delete(conversationId);
+        return { alive: false, sandboxId: this.getSandboxIdFromInstance(inMemory) };
+      }
+    }
+    if (existingSandboxId) {
+      try {
+        const sandbox = await Sandbox.connect(existingSandboxId);
+        const running = await sandbox.isRunning();
+        if (running) {
+          this.sandboxMap.set(conversationId, sandbox);
+          return { alive: true, sandboxId: this.getSandboxIdFromInstance(sandbox) };
+        }
+        try {
+          await sandbox.kill();
+        } catch {
+          // ignore
+        }
+        return { alive: false, sandboxId: existingSandboxId };
+      } catch {
+        return { alive: false, sandboxId: existingSandboxId };
+      }
+    }
+    return { alive: false };
+  }
+
+  /**
+   * 确保会话拥有可用沙箱：若已有沙箱则校验状态，若已销毁则重新创建并返回新 sandboxId
+   * @returns sandbox、sandboxId 及 recreated（是否本次新创建/重建）
+   */
+  async ensureSandbox(
+    conversationId: string,
+    existingSandboxId?: string
+  ): Promise<{ sandbox: Sandbox; sandboxId: string; recreated: boolean }> {
+    const status = await this.checkSandboxStatus(conversationId, existingSandboxId);
+    if (status.alive && status.sandboxId) {
+      const sandbox = this.sandboxMap.get(conversationId);
+      if (sandbox) {
+        return { sandbox, sandboxId: status.sandboxId, recreated: false };
+      }
+    }
+    if (this.sandboxMap.has(conversationId)) {
+      await this.closeSandbox(conversationId);
+    }
+    const sandbox = await this.createSandbox(conversationId);
+    const sandboxId = this.getSandboxIdFromInstance(sandbox);
+    console.log(
+      `[Sandbox] ${conversationId} ensureSandbox: (re)created sandboxId=${sandboxId}`
+    );
+    return { sandbox, sandboxId, recreated: true };
+  }
+
+  private getSandboxIdFromInstance(sandbox: Sandbox): string {
+    return (sandbox as { sandboxId?: string }).sandboxId ?? 'unknown';
   }
 
   /**
@@ -63,6 +133,14 @@ export class SandboxService {
 
   getSandbox(conversationId: string): Sandbox | undefined {
     return this.sandboxMap.get(conversationId);
+  }
+
+  /**
+   * 获取当前会话在内存中关联的沙箱 ID（若存在）
+   */
+  getSandboxId(conversationId: string): string | undefined {
+    const sandbox = this.sandboxMap.get(conversationId);
+    return sandbox ? this.getSandboxIdFromInstance(sandbox) : undefined;
   }
 
   /**

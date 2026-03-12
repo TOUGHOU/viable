@@ -54,10 +54,13 @@ export class PreviewService {
   }
 
   /**
-   * 删除对话时调用：关闭沙箱
+   * 删除对话时调用：关闭沙箱并清除会话中记录的 sandboxId（避免下次误连已关闭的沙箱）
    */
   async stopPreview(conversationId: string): Promise<void> {
     await this.sandboxService.closeSandbox(conversationId);
+    await this.storage
+      .updateConversation(conversationId, { sandboxId: undefined })
+      .catch(() => {});
   }
 
   private async runSetup(conversationId: string): Promise<void> {
@@ -66,14 +69,23 @@ export class PreviewService {
 
     log('runSetup start, templatePath:', this.templatePath);
 
+    const conv = await this.storage.getConversation(conversationId);
+    const existingSandboxId = conv?.sandboxId;
+
+    const { sandboxId, recreated } = await this.sandboxService.ensureSandbox(
+      conversationId,
+      existingSandboxId
+    );
+    if (recreated && sandboxId) {
+      await this.storage.updateConversation(conversationId, { sandboxId });
+    }
+    log('ensureSandbox done, sandboxId=', sandboxId, 'recreated=', recreated);
+
     const files: FileEntry[] = readDirectoryFilesRecursive(this.templatePath);
     log('readDirectoryFilesRecursive done, file count:', files.length);
     if (files.length === 0) {
       throw new Error(`Template is empty or not found: ${this.templatePath}`);
     }
-
-    await this.sandboxService.createSandbox(conversationId);
-    log('createSandbox done');
 
     await this.sandboxService.writeFiles(conversationId, SANDBOX_APP_PATH, files);
     log('writeFiles done');

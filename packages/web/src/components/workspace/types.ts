@@ -1,5 +1,5 @@
 /**
- * @file inspector.types.ts
+ * @file: types.ts
  * @description Inspector 与 iframe 通信相关类型，从 vibe-inspector-plugin/shared 扩展
  */
 

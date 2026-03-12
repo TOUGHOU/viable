@@ -9,18 +9,73 @@ import { useChatStore } from '@/store/chatStore';
 import { WorkspaceLayout } from '@/components/layout/workspaceLayout';
 import { ConversationPanel } from '@/components/workspace/conversationPanel';
 import { PreviewCodePanel } from '@/components/workspace/previewCodePanel';
-import { getConversation } from '@/lib/api/chatApi';
+import { getConversation, getMessages } from '@/lib/api/chatApi';
 
 const POLL_INTERVAL_MS = 2000;
 
 export function WorkspacePage() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const navigate = useNavigate();
-  const { conversations, updateConversation } = useChatStore();
+  const { conversations, updateConversation, addConversation, setMessages } = useChatStore();
   const [hasChecked, setHasChecked] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState(false);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const conversation = conversationId ? conversations.find((c) => c.id === conversationId) : null;
+
+  // 进入页面后根据对话 id 拉取对话详情（若 store 中无该会话则请求并写入 store）
+  useEffect(() => {
+    if (!conversationId) return;
+    const inStore = useChatStore.getState().conversations.some((c) => c.id === conversationId);
+    if (inStore) {
+      setHasChecked(true);
+      return;
+    }
+    let cancelled = false;
+    setDetailLoading(true);
+    setDetailError(false);
+    getConversation({ id: conversationId })
+      .then(async (conv) => {
+        if (cancelled) return;
+        addConversation(conv);
+        try {
+          const { data } = await getMessages({ conversationId, page: 1, pageSize: 100 });
+          if (!cancelled) setMessages(conversationId, data);
+        } catch {
+          // 消息拉取失败仅留空列表，不阻塞页面
+        }
+        setHasChecked(true);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDetailError(true);
+          setHasChecked(true);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId, addConversation, setMessages]);
+
+  // 等待 persist rehydrate 后再决定是否依赖 store 中的会话
+  useEffect(() => {
+    if (!conversationId) return;
+    const inStore = useChatStore.getState().conversations.some((c) => c.id === conversationId);
+    if (inStore) setHasChecked(true);
+    const unsub = useChatStore.subscribe(() => {
+      const found = useChatStore.getState().conversations.some((c) => c.id === conversationId);
+      if (found) setHasChecked(true);
+    });
+    const t = setTimeout(() => setHasChecked(true), 150);
+    return () => {
+      unsub();
+      clearTimeout(t);
+    };
+  }, [conversationId]);
 
   // 轮询预览状态：pending 时定期拉取 getConversation 并更新 store
   useEffect(() => {
@@ -53,27 +108,27 @@ export function WorkspacePage() {
     };
   }, [conversationId, conversation?.previewStatus, updateConversation]);
 
-  // 等待 persist  rehydrate 后再决定是否重定向，避免刷新后误判
-  useEffect(() => {
-    const unsub = useChatStore.subscribe(() => {
-      const found = useChatStore.getState().conversations.some((c) => c.id === conversationId);
-      if (found) setHasChecked(true);
-    });
-    const t = setTimeout(() => setHasChecked(true), 150);
-    return () => {
-      unsub();
-      clearTimeout(t);
-    };
-  }, [conversationId]);
-
+  // 无会话或拉取详情失败时跳回 /chat
   useEffect(() => {
     if (!hasChecked) return;
-    if (!conversationId || !conversation) {
+    if (!conversationId || detailError || !conversation) {
       navigate('/chat', { replace: true });
     }
-  }, [hasChecked, conversationId, conversation, navigate]);
+  }, [hasChecked, conversationId, conversation, detailError, navigate]);
 
-  if (!hasChecked || !conversationId || !conversation) {
+  if (!hasChecked || !conversationId) {
+    return null;
+  }
+
+  if (detailLoading && !conversation) {
+    return (
+      <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+        加载对话详情…
+      </div>
+    );
+  }
+
+  if (detailError || !conversation) {
     return null;
   }
 
@@ -86,7 +141,6 @@ export function WorkspacePage() {
         <ConversationPanel
           conversationId={conversation.id}
           title={conversation.title}
-          showVersionSelect
         />
       }
       previewPanel={

@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { MESSAGE_TYPES } from 'vibe-inspector-plugin/shared';
-import type { UseIframeManagerOptions } from './inspector.types';
+import type { UseIframeManagerOptions } from './types';
 
 export function useIframeManager(options: UseIframeManagerOptions) {
   const { src, inspectorActive = true, iframeRef } = options;
