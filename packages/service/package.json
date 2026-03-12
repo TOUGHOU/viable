@@ -9,6 +9,7 @@
     "start:dev": "pnpm exec nest start --watch",
     "start:debug": "pnpm exec nest start --debug --watch",
     "lint": "pnpm exec eslint \"{src,apps,libs,test}/**/*.ts\" --max-warnings 0",
+    "prisma:migrate": "pnpm exec prisma migrate dev",
     "clean": "rm -rf dist node_modules"
   },
   "dependencies": {

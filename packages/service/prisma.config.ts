@@ -11,6 +11,6 @@ export default {
     path: 'prisma/migrations',
   },
   datasource: {
-    url: process.env['DB_URL'] ?? 'postgresql://localhost:5432/vibe',
+    url: process.env['DB_URL'] ?? process.env['DATABASE_URL'] ?? 'file:./prisma/dev.db',
   },
 };

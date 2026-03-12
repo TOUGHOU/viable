@@ -1,5 +1,5 @@
 /**
- * @file: chatPage.tsx
+ * @file: chat.tsx
  * @description 页面一：Chat 首页（左侧历史 + 右侧欢迎/对话 + 输入栏）
  */
 

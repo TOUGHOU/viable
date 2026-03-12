@@ -1,7 +1,8 @@
 /**
  * @file chat.file.storage.ts
  * @author houfujian houfujian@jd.com
- * @description 基于文件的会话/消息持久化，先写临时文件再 rename 避免写坏
+ * @description 基于文件的会话/消息持久化（已弃用，当前使用 ChatPrismaStorage + SQLite）
+ * 先写临时文件再 rename 避免写坏
  */
 
 import * as fs from 'fs/promises';

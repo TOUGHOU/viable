@@ -30,8 +30,9 @@ Thumbs.db
 coverage/
 .nyc_output/
 
-# Misc
-npm-debug.log*
+# Local SQLite
+*.db
+**/prisma/dev.db
 yarn-error.log*
 pnpm-debug.log*
 /*.local

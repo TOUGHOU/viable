@@ -3,7 +3,41 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
 }
 
-// 后续可增加 MySQL 数据源或单独服务连接 MySQL
+/// 会话：一次对话会话，可关联预览沙箱
+model Conversation {
+  id            String   @id
+  title         String   @default("新对话")
+  updatedAt     DateTime @updatedAt
+  hasPreview    Boolean  @default(false)
+  previewPort   Int?
+  previewUrl    String?
+  sandboxId     String?
+  previewStatus String   @default("pending") // pending | running | failed
+  yn            Int      @default(1) // 1=有效 0=软删除
+
+  messages Message[]
+
+  @@map("conversations")
+}
+
+/// 消息：会话下的一条用户或助手消息
+model Message {
+  id              String   @id
+  conversationId  String
+  role            String   // user | assistant
+  content         String
+  contentFormat   String?  @default("text") // text | markdown
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  model          String?
+  metadata       String?  // JSON 字符串，SQLite 无原生 JSON
+  yn              Int      @default(1) // 1=有效 0=软删除
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("messages")
+}

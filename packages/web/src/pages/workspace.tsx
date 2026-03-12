@@ -1,5 +1,5 @@
 /**
- * @file: workspacePage.tsx
+ * @file: workspace.tsx
  * @description 页面二：对话 + 预览工作台
  */
 
@@ -27,14 +27,14 @@ export function WorkspacePage() {
   // 进入页面后根据对话 id 拉取对话详情（若 store 中无该会话则请求并写入 store）
   useEffect(() => {
     if (!conversationId) return;
-    const inStore = useChatStore.getState().conversations.some((c) => c.id === conversationId);
-    if (inStore) {
-      setHasChecked(true);
-      return;
-    }
+    // const inStore = useChatStore.getState().conversations.some((c) => c.id === conversationId);
+    // if (inStore) {
+    //   setHasChecked(true);
+    //   return;
+    // }
     let cancelled = false;
-    setDetailLoading(true);
-    setDetailError(false);
+    // setDetailLoading(true);
+    // setDetailError(false);
     getConversation({ id: conversationId })
       .then(async (conv) => {
         if (cancelled) return;
@@ -138,10 +138,7 @@ export function WorkspacePage() {
   return (
     <WorkspaceLayout
       conversationPanel={
-        <ConversationPanel
-          conversationId={conversation.id}
-          title={conversation.title}
-        />
+        <ConversationPanel conversationId={conversation.id} title={conversation.title} />
       }
       previewPanel={
         <PreviewCodePanel
