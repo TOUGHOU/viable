@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { MESSAGE_TYPES } from '@jd/vibe-inspector-plugin/shared';
+import { MESSAGE_TYPES } from 'vibe-inspector-plugin/shared';
 import type { UseIframeManagerOptions } from './inspector.types';
 
 export function useIframeManager(options: UseIframeManagerOptions) {

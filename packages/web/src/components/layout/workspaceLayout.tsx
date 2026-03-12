@@ -25,7 +25,7 @@ export function WorkspaceLayout({
     <div className={cn('flex h-screen w-full overflow-hidden', className)}>
       <aside
         className={cn(
-          'flex shrink-0 flex-col border-r border-border bg-muted/30',
+          'flex shrink-0 flex-col border-r border-border/80 bg-surface/95 backdrop-blur-sm',
           conversationPanelClassName ?? 'w-[400px]'
         )}
       >

@@ -1,5 +1,5 @@
 /**
- * @file conversationHistoryItem.tsx
+ * @file: conversationHistoryItem.tsx
  * @description 单条历史：图标、标题、角标、重命名、删除
  */
 
@@ -7,6 +7,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Conversation } from '@/types/chat';
+import { MessageCircleCode, Trash } from 'lucide-react';
 
 export interface ConversationHistoryItemProps {
   conversation: Conversation;
@@ -48,8 +49,8 @@ export function ConversationHistoryItem({
   return (
     <div
       className={cn(
-        'group flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-accent',
-        isActive && 'bg-accent',
+        'group flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm transition-all duration-200 hover:bg-accent/10 border border-transparent hover:border-accent/20',
+        isActive && 'bg-accent/15 text-foreground border-accent/40 ring-1 ring-accent/30',
         className
       )}
       onClick={() => !editing && onSelect()}
@@ -70,8 +71,11 @@ export function ConversationHistoryItem({
         }
       }}
     >
-      <span className="shrink-0 text-muted-foreground" aria-hidden>
-        💬
+      <span
+        className="shrink-0 text-muted-foreground transition-colors group-hover:text-accent/90"
+        aria-hidden
+      >
+        <MessageCircleCode className="h-[18px] w-[18px]" />
       </span>
       {editing ? (
         <input
@@ -80,7 +84,7 @@ export function ConversationHistoryItem({
           value={editTitle}
           onChange={(e) => setEditTitle(e.target.value)}
           onBlur={submitRename}
-          className="min-w-0 flex-1 rounded border border-input bg-background px-1.5 py-0.5 text-sm outline-none"
+          className="min-w-0 flex-1 rounded border border-input bg-card/80 px-1.5 py-0.5 text-sm outline-none focus:ring-1 focus:ring-accent/50 focus:border-accent/40"
           onClick={(e) => e.stopPropagation()}
         />
       ) : (
@@ -102,33 +106,19 @@ export function ConversationHistoryItem({
           {conversation.unread}
         </span>
       )}
-      {conversation.hasPreview && onOpenPreview && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 shrink-0 opacity-0 group-hover:opacity-100"
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenPreview();
-          }}
-        >
-          查看预览
-        </Button>
-      )}
       {onDelete && (
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          className="h-7 shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+          className="h-7 px-2 shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
           aria-label="删除"
           onClick={(e) => {
             e.stopPropagation();
             onDelete();
           }}
         >
-          删除
+          <Trash className="h-4 w-4" />
         </Button>
       )}
     </div>

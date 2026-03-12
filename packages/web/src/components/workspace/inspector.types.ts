@@ -1,10 +1,10 @@
 /**
  * @file inspector.types.ts
- * @description Inspector 与 iframe 通信相关类型，从 @jd/vibe-inspector-plugin/shared 扩展
+ * @description Inspector 与 iframe 通信相关类型，从 vibe-inspector-plugin/shared 扩展
  */
 
 import type { RefObject } from 'react';
-import type { ElementData, ErrorInfo } from '@jd/vibe-inspector-plugin/shared';
+import type { ElementData, ErrorInfo } from 'vibe-inspector-plugin/shared';
 
 export type {
   DropZoneInfo,
@@ -12,7 +12,7 @@ export type {
   ErrorInfo,
   IframeInfoItem,
   ScrollRect,
-} from '@jd/vibe-inspector-plugin/shared';
+} from 'vibe-inspector-plugin/shared';
 
 export interface UseMessageHandlerOptions {
   iframeRef: RefObject<HTMLIFrameElement | null>;

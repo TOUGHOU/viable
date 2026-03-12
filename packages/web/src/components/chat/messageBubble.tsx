@@ -40,10 +40,10 @@ export function MessageBubble({
     >
       <div
         className={cn(
-          'max-w-[80%] rounded-lg px-3 py-2 text-sm',
+          'max-w-[80%] rounded-xl px-4 py-2.5 text-sm',
           isUser
-            ? 'bg-primary text-primary-foreground'
-            : 'bg-muted text-foreground'
+            ? 'bg-primary text-primary-foreground shadow-glow-sm'
+            : 'bg-card/80 text-foreground border border-border/60 backdrop-blur-sm'
         )}
       >
         {showToolCalls && (
@@ -51,7 +51,7 @@ export function MessageBubble({
             {streamToolCalls.map((tc) => (
               <div
                 key={tc.id}
-                className="flex items-start gap-2 rounded bg-muted/50 px-2 py-1.5 text-xs"
+                className="flex items-start gap-2 rounded-lg bg-background/40 px-2.5 py-1.5 text-xs"
               >
                 {tc.status === 'running' ? (
                   <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground" aria-hidden>
@@ -80,14 +80,14 @@ export function MessageBubble({
           </div>
         )}
         {showThinking ? (
-          <div className="flex items-center gap-1 py-0.5 text-muted-foreground">
+          <div className="flex items-center gap-1 py-0.5 text-accent/90">
             <span
               className="inline-flex gap-0.5"
               aria-label="正在思考"
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60 animate-thinking" />
-              <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60 animate-thinking [animation-delay:0.2s]" />
-              <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60 animate-thinking [animation-delay:0.4s]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70 animate-thinking" />
+              <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70 animate-thinking [animation-delay:0.2s]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70 animate-thinking [animation-delay:0.4s]" />
             </span>
             <span className="ml-1 text-xs">正在思考...</span>
           </div>
@@ -96,7 +96,7 @@ export function MessageBubble({
             <ReactMarkdown
               components={{
                 pre: ({ children }) => (
-                  <pre className="overflow-x-auto rounded bg-muted/50 p-2 text-xs">
+                  <pre className="overflow-x-auto rounded-lg bg-background/50 p-3 text-xs border border-border/50">
                     {children}
                   </pre>
                 ),
@@ -107,7 +107,7 @@ export function MessageBubble({
                     </code>
                   ) : (
                     <code
-                      className="rounded bg-muted/50 px-1 py-0.5 text-xs"
+                      className="rounded bg-background/50 px-1.5 py-0.5 text-xs border border-border/50"
                       {...props}
                     >
                       {children}

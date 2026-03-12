@@ -23,7 +23,7 @@ export function MessageList({
   className,
 }: MessageListProps) {
   return (
-    <div className={cn('flex flex-col gap-4', className)}>
+    <div className={cn('flex flex-col gap-5', className)}>
       {messages.map((msg) => (
         <div
           key={msg.id}

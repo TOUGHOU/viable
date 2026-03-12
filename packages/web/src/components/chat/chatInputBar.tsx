@@ -1,12 +1,12 @@
 /**
- * @file chatInputBar.tsx
- * @description 底部输入栏：占位符、@、技能按钮、发送
+ * @file: chatInputBar.tsx
+ * @description 底部输入栏：玻璃质感 + 青色发光
  */
 
 import { useRef } from 'react';
+import { Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { SkillButtonGroup } from './skillButtonGroup';
 import type { SkillId } from '@/types/chat';
 
 export interface ChatInputBarProps {
@@ -21,12 +21,10 @@ export interface ChatInputBarProps {
 }
 
 export function ChatInputBar({
-  placeholder = "发消息或输入'/'选择技能",
+  placeholder = '输入你的需求',
   value,
   onChange,
   onSend,
-  selectedSkill,
-  onSelectSkill,
   className,
   disabled = false,
 }: ChatInputBarProps) {
@@ -40,17 +38,19 @@ export function ChatInputBar({
 
   return (
     <form
-      className={cn('flex flex-col gap-2 border-t border-border bg-background p-3', className)}
+      className={cn(
+        'flex flex-col gap-2 border-t border-border/80 bg-background/80 px-4 py-3 backdrop-blur-md',
+        className
+      )}
       onSubmit={handleSubmit}
     >
-      <div className="flex items-end gap-2 rounded-lg border border-input bg-background px-3 py-2 focus-within:ring-2 focus-within:ring-ring">
-        <button
-          type="button"
-          className="shrink-0 text-muted-foreground hover:text-foreground"
-          aria-label="提及或命令"
-        >
-          @
-        </button>
+      <div
+        className={cn(
+          'flex items-end gap-2 rounded-xl border border-border/80 bg-card/60 px-3 py-2.5 backdrop-blur-sm',
+          'transition-all duration-200',
+          'focus-within:border-accent/50 focus-within:shadow-glow-sm focus-within:ring-2 focus-within:ring-accent/25 focus-within:ring-offset-2 focus-within:ring-offset-background'
+        )}
+      >
         <textarea
           ref={inputRef}
           value={value}
@@ -69,15 +69,17 @@ export function ChatInputBar({
         <Button
           type="submit"
           size="icon"
-          variant="ghost"
           disabled={!canSend}
-          className="shrink-0"
+          className="h-9 w-9 shrink-0 rounded-lg bg-accent text-accent-foreground shadow-glow-sm transition-all hover:bg-accent/90 hover:shadow-glow disabled:opacity-40"
           aria-label="发送"
         >
-          <span className="text-muted-foreground">{disabled ? '…' : '✈️'}</span>
+          {disabled ? (
+            <span className="text-accent-foreground/70">…</span>
+          ) : (
+            <Send className="h-4 w-4" />
+          )}
         </Button>
       </div>
-      <SkillButtonGroup selectedSkill={selectedSkill} onSelectSkill={onSelectSkill} />
     </form>
   );
 }

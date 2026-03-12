@@ -243,8 +243,9 @@ export function ConversationPanel({
   return (
     <div className="flex h-full flex-col">
       {title && (
-        <div className="flex items-center justify-between border-b border-border px-3 py-2 h-12">
-          {title && <span className="text-sm font-medium truncate">{title}</span>}
+        <div className="relative flex h-12 items-center justify-between border-b border-border/80 px-4 py-2">
+          <span className="truncate font-display text-sm font-medium text-foreground">{title}</span>
+          <span className="absolute bottom-0 left-0 h-px w-12 bg-accent/50" aria-hidden />
         </div>
       )}
       <div ref={listScrollRef} className="flex-1 overflow-y-auto min-h-0">
@@ -257,15 +258,15 @@ export function ConversationPanel({
         />
       </div>
       {error ? (
-        <div className="flex items-center justify-between gap-2 px-3 py-2 text-sm text-destructive bg-destructive/10 border-t border-border">
-          <span className="flex-1 min-w-0 truncate">{error}</span>
-          <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center justify-between gap-2 border-t border-border bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <span className="min-w-0 flex-1 truncate">{error}</span>
+          <div className="flex shrink-0 items-center gap-1">
             {lastFailedContent ? (
               <button
                 type="button"
                 onClick={handleRetry}
                 disabled={sending}
-                className="px-2 py-1 rounded text-xs font-medium bg-destructive/20 hover:bg-destructive/30 disabled:opacity-50"
+                className="rounded px-2 py-1 text-xs font-medium hover:bg-destructive/20 disabled:opacity-50"
               >
                 重试
               </button>
@@ -274,7 +275,7 @@ export function ConversationPanel({
               type="button"
               onClick={dismissError}
               aria-label="关闭"
-              className="p-1 rounded hover:bg-destructive/20"
+              className="rounded p-1 hover:bg-destructive/20"
             >
               <span aria-hidden>×</span>
             </button>

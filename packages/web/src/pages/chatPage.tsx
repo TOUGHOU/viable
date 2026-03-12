@@ -1,5 +1,5 @@
 /**
- * @file chatPage.tsx
+ * @file: chatPage.tsx
  * @description 页面一：Chat 首页（左侧历史 + 右侧欢迎/对话 + 输入栏）
  */
 
@@ -80,17 +80,11 @@ export function ChatPage() {
       sidebar={<ConversationHistorySidebar onNewChat={handleNewChat} />}
       main={
         <div className="flex h-full flex-col">
-          {messages.length === 0 ? (
-            <ChatWelcome onQuickQuestion={handleQuickQuestion} />
-          ) : (
-            <MessageList messages={messages} className="flex-1 overflow-y-auto p-4" />
-          )}
-          <ChatInputBar
+          <ChatWelcome
             value={input}
             onChange={setInput}
             onSend={handleSend}
-            selectedSkill={selectedSkill}
-            onSelectSkill={setSelectedSkill}
+            onQuickQuestion={handleQuickQuestion}
           />
         </div>
       }

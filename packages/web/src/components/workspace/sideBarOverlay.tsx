@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import type { ElementData } from '@jd/vibe-inspector-plugin/shared';
+import type { ElementData } from 'vibe-inspector-plugin/shared';
 
 export interface SideBarOverlayProps {
   selectedElement: ElementData | null;

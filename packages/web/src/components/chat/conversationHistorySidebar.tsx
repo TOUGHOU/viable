@@ -1,5 +1,5 @@
 /**
- * @file conversationHistorySidebar.tsx
+ * @file: conversationHistorySidebar.tsx
  * @description 历史对话列表容器
  */
 
@@ -49,9 +49,7 @@ export function ConversationHistorySidebar({ onNewChat }: ConversationHistorySid
     } catch {
       setMessages(c.id, []);
     }
-    if (c.hasPreview) {
-      navigate(`/workspace/${c.id}`);
-    }
+    navigate(`/workspace/${c.id}`);
   };
 
   const handleOpenPreview = (c: Conversation) => {
@@ -75,9 +73,7 @@ export function ConversationHistorySidebar({ onNewChat }: ConversationHistorySid
   const handleRename = async (id: string, title: string) => {
     try {
       const updated = await updateConversationApi({ id, title });
-      setConversations(
-        conversations.map((c) => (c.id === id ? updated : c))
-      );
+      setConversations(conversations.map((c) => (c.id === id ? updated : c)));
     } catch {
       // ignore
     }
@@ -98,12 +94,15 @@ export function ConversationHistorySidebar({ onNewChat }: ConversationHistorySid
   return (
     <div className="flex h-full flex-col">
       <Brand />
-      <div className="px-3 pb-2">
+      <div className="px-3 pt-2">
         <ButtonNewChat onClick={handleNewChatClick}>新对话</ButtonNewChat>
       </div>
-      <div className="flex-1 overflow-y-auto px-2">
-        <h2 className="px-2 py-2 text-xs font-medium text-muted-foreground">历史对话</h2>
-        <ul className="space-y-0.5">
+      <div className="flex-1 overflow-y-auto px-2 py-3">
+        <h2 className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          <span className="h-px w-3 bg-accent/50" aria-hidden />
+          历史对话
+        </h2>
+        <ul className="mt-1 space-y-0.5">
           {conversations.map((c) => (
             <li key={c.id}>
               <ConversationHistoryItem

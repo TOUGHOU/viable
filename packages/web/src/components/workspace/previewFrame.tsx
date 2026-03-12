@@ -7,7 +7,7 @@
 
 import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import type { ElementData } from '@jd/vibe-inspector-plugin/shared';
+import type { ElementData } from 'vibe-inspector-plugin/shared';
 import type { SelectedElement } from '@/types/chat';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { useIframeManager } from './useIframeManager';
