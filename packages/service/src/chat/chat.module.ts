@@ -5,7 +5,8 @@
 import { Module } from '@nestjs/common';
 import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
-import { ChatFileStorage } from './storage/chat.file.storage';
+import { ChatPrismaStorage } from './storage/chat.prisma.storage';
+import { PrismaService } from '../prisma/prisma.service';
 import { LlmModule } from '../llm/llm.module';
 import { PreviewModule } from '../preview/preview.module';
 import { PreviewService } from '../preview/preview.service';
@@ -14,11 +15,12 @@ import { PreviewService } from '../preview/preview.service';
   imports: [LlmModule, PreviewModule],
   controllers: [ChatController],
   providers: [
+    PrismaService,
     PreviewService,
     ChatService,
     {
       provide: 'IChatStorage',
-      useClass: ChatFileStorage,
+      useClass: ChatPrismaStorage,
     },
   ],
 })

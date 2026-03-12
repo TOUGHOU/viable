@@ -3,15 +3,14 @@
  * @description 页面一：Chat 首页（左侧历史 + 右侧欢迎/对话 + 输入栏）
  */
 
-import { useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChatStore, createMessage } from '@/store/chatStore';
 import { createConversation as createConversationApi } from '@/lib/api/chatApi';
 import { SidebarLayout } from '@/components/layout/sidebarLayout';
 import { ConversationHistorySidebar } from '@/components/chat/conversationHistorySidebar';
 import { ChatWelcome } from '@/components/chat/chatWelcome';
-import { ChatInputBar } from '@/components/chat/chatInputBar';
-import { MessageList } from '@/components/chat/messageList';
+import { ThemeToggle } from '@/components/themeToggle';
 
 export function ChatPage() {
   const navigate = useNavigate();
@@ -20,14 +19,10 @@ export function ChatPage() {
     setCurrentConversationId,
     addConversation,
     addMessage,
-    getMessages,
-    selectedSkill,
-    setSelectedSkill,
     startNewChat,
   } = useChatStore();
 
   const [input, setInput] = useState('');
-  const messages = currentConversationId ? getMessages(currentConversationId) : [];
 
   const handleNewChat = () => {
     startNewChat();
@@ -75,17 +70,25 @@ export function ChatPage() {
     }
   };
 
+  const sidebar = useMemo(() => {
+    return <ConversationHistorySidebar onNewChat={handleNewChat} />;
+  }, []);
+
   return (
     <SidebarLayout
-      sidebar={<ConversationHistorySidebar onNewChat={handleNewChat} />}
+      sidebar={sidebar}
       main={
-        <div className="flex h-full flex-col">
+        <div className="flex h-full flex-col relative">
           <ChatWelcome
             value={input}
             onChange={setInput}
             onSend={handleSend}
             onQuickQuestion={handleQuickQuestion}
           />
+
+          <div className="absolute top-3 right-3 z-50">
+            <ThemeToggle />
+          </div>
         </div>
       }
     />

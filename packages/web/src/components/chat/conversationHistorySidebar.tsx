@@ -5,6 +5,7 @@
 
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import useSWR from 'swr';
 import { Brand } from './brand';
 import { ButtonNewChat } from './buttonNewChat';
 import { ConversationHistoryItem } from './conversationHistoryItem';
@@ -15,6 +16,8 @@ import { createConversation as createConversationApi } from '@/lib/api/chatApi';
 import { getMessages as getMessagesApi } from '@/lib/api/chatApi';
 import { updateConversation as updateConversationApi } from '@/lib/api/chatApi';
 import { deleteConversation as deleteConversationApi } from '@/lib/api/chatApi';
+
+const CONVERSATIONS_KEY = 'conversations';
 
 export interface ConversationHistorySidebarProps {
   onNewChat: () => void;
@@ -31,11 +34,17 @@ export function ConversationHistorySidebar({ onNewChat }: ConversationHistorySid
     startNewChat,
   } = useChatStore();
 
+  const { data, mutate } = useSWR(
+    CONVERSATIONS_KEY,
+    () => getConversationsApi({ page: 1, pageSize: 100 }),
+    { dedupingInterval: 2000 }
+  );
+
   useEffect(() => {
-    getConversationsApi({ page: 1, pageSize: 100 })
-      .then((res) => setConversations(res.data))
-      .catch(() => {});
-  }, [setConversations]);
+    if (data?.data) {
+      setConversations(data.data);
+    }
+  }, [data, setConversations]);
 
   const handleSelect = async (c: Conversation) => {
     setCurrentConversationId(c.id);
@@ -65,6 +74,7 @@ export function ConversationHistorySidebar({ onNewChat }: ConversationHistorySid
       setCurrentConversationId(conv.id);
       setMessages(conv.id, []);
       navigate(`/workspace/${conv.id}`);
+      void mutate();
     } catch {
       onNewChat();
     }
@@ -74,6 +84,7 @@ export function ConversationHistorySidebar({ onNewChat }: ConversationHistorySid
     try {
       const updated = await updateConversationApi({ id, title });
       setConversations(conversations.map((c) => (c.id === id ? updated : c)));
+      void mutate();
     } catch {
       // ignore
     }
@@ -86,6 +97,7 @@ export function ConversationHistorySidebar({ onNewChat }: ConversationHistorySid
       if (currentConversationId === id) {
         startNewChat();
       }
+      void mutate();
     } catch {
       // ignore
     }

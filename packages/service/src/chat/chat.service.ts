@@ -1,5 +1,5 @@
 /**
- * @file chat.service.ts
+ * @file: chat.service.ts
  * @author houfujian houfujian@jd.com
  * @description 会话与消息业务逻辑，委托存储层 CRUD
  */
@@ -27,12 +27,21 @@ export class ChatService {
     private readonly previewService: PreviewService
   ) {}
 
-  async createConversation(data: {
-    title?: string;
-    hasPreview?: boolean;
-  }): Promise<Conversation> {
+  async createConversation(data: { title?: string; hasPreview?: boolean }): Promise<Conversation> {
     const conversation = await this.storage.createConversation(data);
     this.previewService.setupPreview(conversation.id);
+
+    const now = new Date().toISOString();
+    const welcomeMessage: Message = {
+      id: createId(),
+      role: 'user',
+      content: data.title ?? '新会话',
+      contentFormat: 'text',
+      createdAt: now,
+      updatedAt: now,
+    };
+    await this.storage.addMessage(conversation.id, welcomeMessage);
+
     return conversation;
   }
 
@@ -85,10 +94,7 @@ export class ChatService {
     });
   }
 
-  async getMessage(
-    conversationId: string,
-    messageId: string
-  ): Promise<Message> {
+  async getMessage(conversationId: string, messageId: string): Promise<Message> {
     await this.getConversation(conversationId);
     const msg = await this.storage.getMessage(conversationId, messageId);
     if (!msg) throw new NotFoundException('消息不存在');
@@ -100,20 +106,13 @@ export class ChatService {
     messageId: string,
     content: string
   ): Promise<Message> {
-    const msg = await this.storage.updateMessage(
-      conversationId,
-      messageId,
-      content
-    );
+    const msg = await this.storage.updateMessage(conversationId, messageId, content);
     if (!msg) throw new NotFoundException('消息不存在');
     await this.storage.updateConversation(conversationId, {});
     return msg;
   }
 
-  async deleteMessage(
-    conversationId: string,
-    messageId: string
-  ): Promise<{ success: boolean }> {
+  async deleteMessage(conversationId: string, messageId: string): Promise<{ success: boolean }> {
     const ok = await this.storage.deleteMessage(conversationId, messageId);
     if (!ok) throw new NotFoundException('消息不存在');
     return { success: true };
@@ -131,7 +130,14 @@ export class ChatService {
       lineNumber: number;
       col: number;
       floorId?: string;
-      rect: { left: number; top: number; width: number; height: number; right: number; bottom: number };
+      rect: {
+        left: number;
+        top: number;
+        width: number;
+        height: number;
+        right: number;
+        bottom: number;
+      };
     }>;
   }): Promise<{ userMessage: Message; assistantMessage: Message }> {
     const { conversationId, content, selectedElements } = params;
@@ -194,7 +200,14 @@ export class ChatService {
         lineNumber: number;
         col: number;
         floorId?: string;
-        rect: { left: number; top: number; width: number; height: number; right: number; bottom: number };
+        rect: {
+          left: number;
+          top: number;
+          width: number;
+          height: number;
+          right: number;
+          bottom: number;
+        };
       }>;
     }
   ): Promise<void> {
@@ -224,8 +237,7 @@ export class ChatService {
     const sendEvent = (event: string, data: string | object) => {
       res.write(`event: ${event}\n`);
       if (typeof data === 'string') {
-        for (const line of data.split('\n'))
-          res.write(`data: ${line}\n`);
+        for (const line of data.split('\n')) res.write(`data: ${line}\n`);
       } else {
         res.write(`data: ${JSON.stringify(data)}\n`);
       }
@@ -271,8 +283,7 @@ export class ChatService {
         }
       }
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : '大模型调用失败';
+      const message = err instanceof Error ? err.message : '大模型调用失败';
       sendEvent('error', { message });
       res.end();
       return;

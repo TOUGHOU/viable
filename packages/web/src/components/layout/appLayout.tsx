@@ -36,9 +36,7 @@ export function AppLayout({ children, className }: AppLayoutProps) {
           className="h-full w-full"
         />
       </div> */}
-      <div className="fixed top-3 right-3 z-50">
-        <ThemeToggle />
-      </div>
+
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">{children}</div>
     </div>
   );

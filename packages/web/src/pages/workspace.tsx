@@ -5,6 +5,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import useSWR from 'swr';
 import { useChatStore } from '@/store/chatStore';
 import { WorkspaceLayout } from '@/components/layout/workspaceLayout';
 import { ConversationPanel } from '@/components/workspace/conversationPanel';
@@ -12,6 +13,8 @@ import { PreviewCodePanel } from '@/components/workspace/previewCodePanel';
 import { getConversation, getMessages } from '@/lib/api/chatApi';
 
 const POLL_INTERVAL_MS = 2000;
+
+const conversationKey = (id: string) => ['workspace-conversation', id] as const;
 
 export function WorkspacePage() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -24,42 +27,45 @@ export function WorkspacePage() {
 
   const conversation = conversationId ? conversations.find((c) => c.id === conversationId) : null;
 
-  // 进入页面后根据对话 id 拉取对话详情（若 store 中无该会话则请求并写入 store）
+  const { data: convData, error: convError, isLoading: convLoading } = useSWR(
+    conversationId ? conversationKey(conversationId) : null,
+    () => getConversation({ id: conversationId! }),
+    { dedupingInterval: 2000 }
+  );
+
+  // 对话详情拉取完成后写入 store 并拉取消息
   useEffect(() => {
-    if (!conversationId) return;
-    // const inStore = useChatStore.getState().conversations.some((c) => c.id === conversationId);
-    // if (inStore) {
-    //   setHasChecked(true);
-    //   return;
-    // }
+    if (!conversationId || !convData) return;
     let cancelled = false;
-    // setDetailLoading(true);
-    // setDetailError(false);
-    getConversation({ id: conversationId })
-      .then(async (conv) => {
-        if (cancelled) return;
-        addConversation(conv);
-        try {
-          const { data } = await getMessages({ conversationId, page: 1, pageSize: 100 });
-          if (!cancelled) setMessages(conversationId, data);
-        } catch {
-          // 消息拉取失败仅留空列表，不阻塞页面
-        }
-        setHasChecked(true);
+    addConversation(convData);
+    getMessages({ conversationId, page: 1, pageSize: 100 })
+      .then((res) => {
+        if (!cancelled) setMessages(conversationId, res.data);
       })
       .catch(() => {
-        if (!cancelled) {
-          setDetailError(true);
-          setHasChecked(true);
-        }
+        // 消息拉取失败仅留空列表，不阻塞页面
       })
       .finally(() => {
         if (!cancelled) setDetailLoading(false);
+        if (!cancelled) setHasChecked(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [conversationId, addConversation, setMessages]);
+  }, [conversationId, convData, addConversation, setMessages]);
+
+  useEffect(() => {
+    if (convError && conversationId) {
+      setDetailError(true);
+      setHasChecked(true);
+    }
+  }, [convError, conversationId]);
+
+  useEffect(() => {
+    if (convLoading && !conversation) {
+      setDetailLoading(true);
+    }
+  }, [convLoading, conversation]);
 
   // 等待 persist rehydrate 后再决定是否依赖 store 中的会话
   useEffect(() => {

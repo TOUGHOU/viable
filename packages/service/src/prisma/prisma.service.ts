@@ -1,22 +1,17 @@
 /**
- * @file prisma.service.ts
+ * @file: prisma.service.ts
  * @author houfujian houfujian@jd.com
- * @description Prisma Client 单例，使用 SQLite adapter，供存储层注入
+ * @description Prisma Client 单例（SQLite），供存储层注入。Prisma 7 仅支持通过 adapter 传入连接。
  */
 
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
 
-const getDatabaseUrl = (): string => {
-  const url = process.env['DB_URL'] ?? process.env['DATABASE_URL'] ?? 'file:./prisma/dev.db';
-  return url;
-};
-
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor() {
-    const url = getDatabaseUrl();
+    const url = process.env['DATABASE_URL'] ?? 'file:./prisma/dev.db';
     const adapter = new PrismaBetterSqlite3({ url });
     super({ adapter });
   }

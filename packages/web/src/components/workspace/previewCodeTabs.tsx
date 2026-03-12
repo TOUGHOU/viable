@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '../themeToggle';
 
 export type { PreviewCodeTab };
 
@@ -108,7 +109,7 @@ const RightToolbarActions = memo(function RightToolbarActions({
 
   return (
     <div className="flex items-center gap-2">
-      {showVersionSelect ? (
+      {/* {showVersionSelect ? (
         <Select value={version} onValueChange={setVersion}>
           <SelectTrigger
             className="h-8 w-[72px] border-input bg-background px-2.5 py-1.5 shadow-sm"
@@ -124,16 +125,9 @@ const RightToolbarActions = memo(function RightToolbarActions({
             ))}
           </SelectContent>
         </Select>
-      ) : null}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="h-8 px-2.5 py-1.5 text-xs"
-        title="下载"
-      >
-        下载
-      </Button>
+      ) : null} */}
+
+      <ThemeToggle />
     </div>
   );
 });
