@@ -99,7 +99,6 @@ export function ConversationHistorySidebar({ onNewChat }: ConversationHistorySid
       </div>
       <div className="flex-1 overflow-y-auto px-2 py-3">
         <h2 className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          <span className="h-px w-3 bg-accent/50" aria-hidden />
           历史对话
         </h2>
         <ul className="mt-1 space-y-0.5">

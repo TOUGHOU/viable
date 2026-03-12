@@ -75,7 +75,7 @@ export function ConversationHistoryItem({
         className="shrink-0 text-muted-foreground transition-colors group-hover:text-accent/90"
         aria-hidden
       >
-        <MessageCircleCode className="h-[18px] w-[18px]" />
+        <MessageCircleCode className="h-[14px] w-[14px]" />
       </span>
       {editing ? (
         <input
@@ -118,7 +118,7 @@ export function ConversationHistoryItem({
             onDelete();
           }}
         >
-          <Trash className="h-4 w-4" />
+          <Trash className="h-[14px] w-[14px]" />
         </Button>
       )}
     </div>
