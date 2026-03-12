@@ -49,8 +49,8 @@ export function ConversationHistoryItem({
   return (
     <div
       className={cn(
-        'group flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm transition-all duration-200 hover:bg-accent/10 border border-transparent hover:border-accent/20',
-        isActive && 'bg-accent/15 text-foreground border-accent/40 ring-1 ring-accent/30',
+        'group flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-all duration-200 hover:bg-accent/10 border border-transparent hover:border-accent/10',
+        isActive && 'bg-accent/10 text-foreground border-accent/40 ',
         className
       )}
       onClick={() => !editing && onSelect()}

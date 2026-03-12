@@ -1,0 +1,84 @@
+---
+description: E2B 沙箱 API 速查：挂起、销毁、状态查询、列表与连接。在编辑 sandbox 相关代码或使用 @e2b/code-interpreter 时参考。
+globs: packages/service/**/*sandbox*.ts, packages/service/**/preview/**/*.ts
+alwaysApply: false
+---
+
+# E2B 沙箱 API 速查（挂起 / 销毁 / 状态）
+
+参考文档：<https://e2b.dev/docs>，Sandbox lifecycle、Persistence、List、Connect。
+
+## 沙箱状态（State）
+
+| 状态 | 说明 |
+|------|------|
+| **Running** | 运行中，可执行代码 |
+| **Paused** | 已挂起，保留内存与文件，不能执行代码 |
+| **Snapshotting** | 正在创建快照，短暂暂停后回到 Running |
+| **Killed** | 已销毁，资源释放，不可恢复 |
+
+## 挂起（Pause）
+
+- **实例挂起**：`sandbox.pause()`（Running → Paused）
+- 恢复：对已挂起沙箱使用 `Sandbox.connect(sandboxId)` 会自动恢复再连接
+
+## 销毁（Kill）
+
+- **当前实例**：`await sandbox.kill()`（任意状态 → Killed）
+- **按 ID 销毁**：`Sandbox.kill(sandboxId)`（无需持有实例）
+
+## 状态与存在性查询
+
+- **当前沙箱信息（含 state）**：`await sandbox.getInfo()` → 含 `sandboxId`、`templateId`、`metadata`、`startedAt`、`endAt`、**`state`**
+- **列出沙箱（按状态过滤）**：`Sandbox.list({ query: { state: ['running', 'paused'] } })`，返回分页列表，可判断某 ID 是否存在及状态
+- **连接指定沙箱**：`Sandbox.connect(sandboxId)` — 若为 Paused 会先恢复；若已 Killed 或不存在会报错
+
+判断「是否存在」：用 `Sandbox.list({ query: { state: ['running','paused'] } })` 按 `sandboxId` 查找；或对已知 ID 调用 `Sandbox.connect(sandboxId)`，失败则视为不存在或已 Killed。
+
+## 生命周期事件 API（REST）
+
+- 单沙箱：`GET https://api.e2b.app/events/sandboxes/{sandboxId}`
+- 团队全部：`GET https://api.e2b.app/events/sandboxes?limit=10&offset=0&orderAsc=false`
+- Header：`X-API-Key: E2B_API_KEY`
+- 事件类型示例：`sandbox.lifecycle.created`、`sandbox.lifecycle.paused`、`sandbox.lifecycle.resumed`、`sandbox.lifecycle.killed`、`sandbox.lifecycle.updated`
+
+## 与本项目
+
+- 沙箱封装在 `packages/service/src/preview/sandbox.service.ts`，按 `conversationId` 管理 `Sandbox` 实例。
+- 状态检查可结合 `getInfo().state` 或 `Sandbox.list()` 过滤；销毁可用 `sandbox.kill()` 或 `Sandbox.kill(sandboxId)`。
+
+---
+
+## 超时与销毁策略（常见问题）
+
+### 创建后多久会销毁？
+
+- 由创建时的 **timeout**（`timeoutMs` / `timeout`）决定；不传则用默认（文档中 connect 默认 5 分钟，create 建议显式传 `timeoutMs`）。
+- 超时到期后的行为由 **lifecycle.onTimeout** 决定：
+  - **`onTimeout: 'kill'`（默认）**：超时到期 → 沙箱被**销毁**（Killed）。
+  - **`onTimeout: 'pause'`**：超时到期 → 沙箱被**自动挂起**（Paused），不销毁。
+- **连续运行上限**：Running 状态 Base 最多 1 小时、Pro 最多 24 小时；挂起再恢复会重置该上限。
+
+### 销毁条件有哪几种？
+
+只有两种：
+1. **超时到期且 onTimeout 为默认 `'kill'`**。
+2. **手动调用** `sandbox.kill()` 或 `Sandbox.kill(sandboxId)`。
+
+### 挂起后多久会被销毁？
+
+**不会因时间自动销毁。** Paused 沙箱 **indefinitely** 保留，无 TTL；只有手动 `kill()` 才会销毁。
+
+### 只能手动挂起吗？
+
+否。可配置**超时后自动挂起**：
+- 创建时设置 `lifecycle: { onTimeout: 'pause' }`，则 timeout 到期时自动变为 Paused，无需调用 `sandbox.pause()`。
+- 可选 `autoResume: true`，在有请求时自动恢复。
+
+```js
+Sandbox.create({
+  timeoutMs: 10 * 60 * 1000,
+  lifecycle: { onTimeout: 'pause', autoResume: false },
+});
+```
+

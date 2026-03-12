@@ -31,7 +31,13 @@ export class SandboxService {
       console.log(`[Sandbox] ${conversationId} createSandbox: reuse existing`);
       return existing;
     }
-    const sandbox = await Sandbox.create();
+    const sandbox = await Sandbox.create({
+      timeoutMs: 10 * 1000 * 6,
+      lifecycle: {
+        onTimeout: 'pause',
+        autoResume: true,
+      },
+    });
     this.sandboxMap.set(conversationId, sandbox);
     const id = this.getSandboxIdFromInstance(sandbox);
     console.log(`[Sandbox] ${conversationId} createSandbox: created sandboxId=${id}`);
@@ -98,9 +104,7 @@ export class SandboxService {
     }
     const sandbox = await this.createSandbox(conversationId);
     const sandboxId = this.getSandboxIdFromInstance(sandbox);
-    console.log(
-      `[Sandbox] ${conversationId} ensureSandbox: (re)created sandboxId=${sandboxId}`
-    );
+    console.log(`[Sandbox] ${conversationId} ensureSandbox: (re)created sandboxId=${sandboxId}`);
     return { sandbox, sandboxId, recreated: true };
   }
 

@@ -113,7 +113,7 @@ export function ConversationHistorySidebar({ onNewChat }: ConversationHistorySid
         <h2 className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
           历史对话
         </h2>
-        <ul className="mt-1 space-y-0.5">
+        <ul className="mt-1 space-y-2">
           {conversations.map((c) => (
             <li key={c.id}>
               <ConversationHistoryItem
