@@ -1,38 +1,69 @@
 /**
  * @file chat.prisma.storage.ts
  * @author houfujian houfujian@jd.com
- * @description 基于 SQLite(Prisma) 的会话/消息持久化，实现 IChatStorage
+ * @description 基于 SQLite(Prisma) 的项目与消息持久化，实现 IProjectStorage
  */
 
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import type {
-  IChatStorage,
-  Conversation,
-  Message,
+  IProjectStorage,
+  Project,
+  ChatMessage,
   PaginationMeta,
   PreviewStatus,
+  User,
 } from './chat-storage.interface';
+
+const DEFAULT_USER_ID = 'default';
 
 function createId(): string {
   return Math.random().toString(36).slice(2, 11);
 }
 
-function toConversation(row: {
+function nowMs(): number {
+  return Date.now();
+}
+
+function toUser(row: { id: string; createdAt: number; lastSeenAt: number; projectLimit: number; yn: number; deletedAt: number | null }): User {
+  return {
+    id: row.id,
+    createdAt: row.createdAt,
+    lastSeenAt: row.lastSeenAt,
+    projectLimit: row.projectLimit,
+    yn: row.yn,
+    deletedAt: row.deletedAt ?? undefined,
+  };
+}
+
+function toProject(row: {
   id: string;
-  title: string;
-  updatedAt: Date;
+  userId: string;
+  name: string;
+  description: string | null;
+  templateId: string | null;
+  framework: string;
+  styling: string;
+  currentVersionId: string | null;
+  createdAt: number;
+  updatedAt: number;
   hasPreview: boolean;
   previewPort: number | null;
   previewUrl: string | null;
   sandboxId: string | null;
   previewStatus: string;
-  yn?: number;
-}): Conversation {
+}): Project {
   return {
     id: row.id,
-    title: row.title,
-    updatedAt: row.updatedAt.toISOString(),
+    userId: row.userId,
+    name: row.name,
+    description: row.description ?? undefined,
+    templateId: row.templateId ?? undefined,
+    framework: row.framework,
+    styling: row.styling,
+    currentVersionId: row.currentVersionId ?? undefined,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
     hasPreview: row.hasPreview,
     previewPort: row.previewPort ?? undefined,
     previewUrl: row.previewUrl ?? undefined,
@@ -41,72 +72,112 @@ function toConversation(row: {
   };
 }
 
-function toMessage(row: {
+function toChatMessage(row: {
   id: string;
+  projectId: string;
+  conversationId: string;
+  parentId: string | null;
   role: string;
-  content: string;
-  contentFormat: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  model: string | null;
+  messageType: string;
+  contentText: string | null;
+  contentJson: string | null;
   metadata: string | null;
-  yn?: number;
-}): Message {
-  let metadata: Record<string, unknown> | undefined;
-  if (row.metadata) {
-    try {
-      metadata = JSON.parse(row.metadata) as Record<string, unknown>;
-    } catch {
-      metadata = undefined;
-    }
-  }
+  versionId: string | null;
+  status: string;
+  createdAt: number;
+  updatedAt: number;
+}): ChatMessage {
   return {
     id: row.id,
-    role: row.role as 'user' | 'assistant',
-    content: row.content,
-    contentFormat: (row.contentFormat as 'text' | 'markdown') ?? 'text',
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-    model: row.model ?? undefined,
-    metadata,
+    projectId: row.projectId,
+    conversationId: row.conversationId,
+    parentId: row.parentId ?? undefined,
+    role: row.role as 'user' | 'assistant' | 'system',
+    messageType: row.messageType,
+    contentText: row.contentText ?? undefined,
+    contentJson: row.contentJson ?? undefined,
+    metadata: row.metadata ?? undefined,
+    versionId: row.versionId ?? undefined,
+    status: row.status,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
 
 @Injectable()
-export class ChatPrismaStorage implements IChatStorage {
+export class ChatPrismaStorage implements IProjectStorage {
   constructor(private readonly prisma: PrismaService) {}
 
-  async createConversation(data: {
-    title?: string;
-    hasPreview?: boolean;
-  }): Promise<Conversation> {
-    const id = createId();
-    const row = await this.prisma.conversation.create({
+  async getOrCreateUser(userId?: string): Promise<User> {
+    const id = userId ?? DEFAULT_USER_ID;
+    const row = await this.prisma.user.findFirst({
+      where: { id, yn: 1 },
+    });
+    if (row) {
+      await this.prisma.user.updateMany({
+        where: { id },
+        data: { lastSeenAt: nowMs() },
+      });
+      return toUser({ ...row, deletedAt: row.deletedAt });
+    }
+    const now = nowMs();
+    const created = await this.prisma.user.create({
       data: {
         id,
-        title: data.title ?? '新对话',
-        hasPreview: data.hasPreview ?? false,
+        createdAt: now,
+        lastSeenAt: now,
+        projectLimit: 1,
+        yn: 1,
       },
     });
-    return toConversation(row);
+    return toUser(created);
   }
 
-  async getConversations(params: {
-    page: number;
-    pageSize: number;
-  }): Promise<{ data: Conversation[]; meta: PaginationMeta }> {
+  async createProject(data: {
+    userId: string;
+    name?: string;
+    description?: string | null;
+    templateId?: string | null;
+    framework?: string;
+    styling?: string;
+    hasPreview?: boolean;
+  }): Promise<Project> {
+    const id = createId();
+    const now = nowMs();
+    const row = await this.prisma.project.create({
+      data: {
+        id,
+        userId: data.userId,
+        name: data.name ?? '新项目',
+        description: data.description ?? null,
+        templateId: data.templateId ?? null,
+        framework: data.framework ?? 'react',
+        styling: data.styling ?? 'tailwind',
+        createdAt: now,
+        updatedAt: now,
+        hasPreview: data.hasPreview ?? false,
+        previewStatus: 'pending',
+      },
+    });
+    return toProject(row);
+  }
+
+  async getProjects(
+    userId: string,
+    params: { page: number; pageSize: number }
+  ): Promise<{ data: Project[]; meta: PaginationMeta }> {
     const [list, total] = await Promise.all([
-      this.prisma.conversation.findMany({
-        where: { yn: 1 },
+      this.prisma.project.findMany({
+        where: { userId, yn: 1 },
         orderBy: { updatedAt: 'desc' },
         skip: (params.page - 1) * params.pageSize,
         take: params.pageSize,
       }),
-      this.prisma.conversation.count({ where: { yn: 1 } }),
+      this.prisma.project.count({ where: { userId, yn: 1 } }),
     ]);
     const totalPages = Math.max(1, Math.ceil(total / params.pageSize));
     return {
-      data: list.map(toConversation),
+      data: list.map(toProject),
       meta: {
         total,
         page: params.page,
@@ -116,75 +187,72 @@ export class ChatPrismaStorage implements IChatStorage {
     };
   }
 
-  async getConversation(id: string): Promise<Conversation | null> {
-    const row = await this.prisma.conversation.findFirst({
+  async getProject(id: string): Promise<Project | null> {
+    const row = await this.prisma.project.findFirst({
       where: { id, yn: 1 },
     });
-    return row ? toConversation(row) : null;
+    return row ? toProject(row) : null;
   }
 
-  async updateConversation(
+  async updateProject(
     id: string,
     data: {
-      title?: string;
-      hasPreview?: boolean;
-      previewPort?: number;
-      previewUrl?: string;
-      sandboxId?: string;
-      previewStatus?: PreviewStatus;
-    }
-  ): Promise<Conversation | null> {
-    const updatePayload: {
-      title?: string;
+      name?: string;
+      description?: string | null;
       hasPreview?: boolean;
       previewPort?: number | null;
       previewUrl?: string | null;
       sandboxId?: string | null;
-      previewStatus?: string;
-    } = {};
-    if (data.title !== undefined) updatePayload.title = data.title;
-    if (data.hasPreview !== undefined) updatePayload.hasPreview = data.hasPreview;
+      previewStatus?: PreviewStatus;
+      currentVersionId?: string | null;
+    }
+  ): Promise<Project | null> {
+    const updatePayload: Record<string, unknown> = {};
+    if (data.name !== undefined) updatePayload.name = data.name;
+    if (data.description !== undefined) updatePayload.description = data.description;
     if (data.previewPort !== undefined) updatePayload.previewPort = data.previewPort;
     if (data.previewUrl !== undefined) updatePayload.previewUrl = data.previewUrl;
-    if ('sandboxId' in data) updatePayload.sandboxId = data.sandboxId ?? null;
-    if (data.previewStatus !== undefined)
-      updatePayload.previewStatus = data.previewStatus;
+    if (data.sandboxId !== undefined) updatePayload.sandboxId = data.sandboxId;
+    if (data.previewStatus !== undefined) updatePayload.previewStatus = data.previewStatus;
+    if (data.currentVersionId !== undefined) updatePayload.currentVersionId = data.currentVersionId;
+    if (data.hasPreview !== undefined) updatePayload.hasPreview = data.hasPreview;
+    updatePayload.updatedAt = nowMs();
 
-    const row = await this.prisma.conversation.updateMany({
+    const result = await this.prisma.project.updateMany({
       where: { id, yn: 1 },
-      data: updatePayload,
+      data: updatePayload as never,
     });
-    if (row.count === 0) return null;
-    const updated = await this.prisma.conversation.findFirst({
+    if (result.count === 0) return null;
+    const row = await this.prisma.project.findFirst({
       where: { id, yn: 1 },
     });
-    return updated ? toConversation(updated) : null;
+    return row ? toProject(row) : null;
   }
 
-  async deleteConversation(id: string): Promise<boolean> {
-    const result = await this.prisma.conversation.updateMany({
+  async deleteProject(id: string): Promise<boolean> {
+    const result = await this.prisma.project.updateMany({
       where: { id, yn: 1 },
-      data: { yn: 0 },
+      data: { yn: 0, deletedAt: nowMs() },
     });
     return result.count > 0;
   }
 
   async getMessages(
-    conversationId: string,
+    projectId: string,
     params: { page: number; pageSize: number }
-  ): Promise<{ data: Message[]; meta: PaginationMeta }> {
+  ): Promise<{ data: ChatMessage[]; meta: PaginationMeta }> {
     const [list, total] = await Promise.all([
-      this.prisma.message.findMany({
-        where: { conversationId, yn: 1 },
+      this.prisma.chatMessage.findMany({
+        where: { projectId, yn: 1 },
         orderBy: { createdAt: 'asc' },
         skip: (params.page - 1) * params.pageSize,
         take: params.pageSize,
       }),
-      this.prisma.message.count({ where: { conversationId, yn: 1 } }),
+      this.prisma.chatMessage.count({ where: { projectId, yn: 1 } }),
     ]);
     const totalPages = Math.max(1, Math.ceil(total / params.pageSize));
     return {
-      data: list.map(toMessage),
+      data: list.map(toChatMessage),
       meta: {
         total,
         page: params.page,
@@ -194,58 +262,62 @@ export class ChatPrismaStorage implements IChatStorage {
     };
   }
 
-  async getMessage(
-    conversationId: string,
-    messageId: string
-  ): Promise<Message | null> {
-    const row = await this.prisma.message.findFirst({
-      where: { id: messageId, conversationId, yn: 1 },
+  async getMessage(projectId: string, messageId: string): Promise<ChatMessage | null> {
+    const row = await this.prisma.chatMessage.findFirst({
+      where: { id: messageId, projectId, yn: 1 },
     });
-    return row ? toMessage(row) : null;
+    return row ? toChatMessage(row) : null;
   }
 
-  async addMessage(conversationId: string, message: Message): Promise<void> {
-    await this.prisma.message.create({
+  async addMessage(projectId: string, message: ChatMessage): Promise<void> {
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, yn: 1 },
+    });
+    if (!project) return;
+    await this.prisma.chatMessage.create({
       data: {
         id: message.id,
-        conversationId,
+        projectId,
+        conversationId: message.conversationId,
+        parentId: message.parentId ?? null,
         role: message.role,
-        content: message.content,
-        contentFormat: message.contentFormat ?? 'text',
-        createdAt: new Date(message.createdAt),
-        updatedAt: new Date(message.updatedAt),
-        model: message.model ?? null,
-        metadata:
-          message.metadata != null
-            ? JSON.stringify(message.metadata)
-            : null,
+        messageType: message.messageType,
+        contentText: message.contentText ?? null,
+        contentJson: message.contentJson ?? null,
+        metadata: message.metadata ?? null,
+        versionId: message.versionId ?? null,
+        status: message.status,
+        createdAt: message.createdAt,
+        updatedAt: message.updatedAt,
       },
+    });
+    await this.prisma.project.updateMany({
+      where: { id: projectId, yn: 1 },
+      data: { updatedAt: message.updatedAt },
     });
   }
 
   async updateMessage(
-    conversationId: string,
+    projectId: string,
     messageId: string,
     content: string
-  ): Promise<Message | null> {
-    const updated = await this.prisma.message.updateMany({
-      where: { id: messageId, conversationId, yn: 1 },
-      data: { content, updatedAt: new Date() },
+  ): Promise<ChatMessage | null> {
+    const now = nowMs();
+    const result = await this.prisma.chatMessage.updateMany({
+      where: { id: messageId, projectId, yn: 1 },
+      data: { contentText: content, updatedAt: now },
     });
-    if (updated.count === 0) return null;
-    const row = await this.prisma.message.findFirst({
-      where: { id: messageId, conversationId, yn: 1 },
+    if (result.count === 0) return null;
+    const row = await this.prisma.chatMessage.findFirst({
+      where: { id: messageId, projectId, yn: 1 },
     });
-    return row ? toMessage(row) : null;
+    return row ? toChatMessage(row) : null;
   }
 
-  async deleteMessage(
-    conversationId: string,
-    messageId: string
-  ): Promise<boolean> {
-    const result = await this.prisma.message.updateMany({
-      where: { id: messageId, conversationId, yn: 1 },
-      data: { yn: 0 },
+  async deleteMessage(projectId: string, messageId: string): Promise<boolean> {
+    const result = await this.prisma.chatMessage.updateMany({
+      where: { id: messageId, projectId, yn: 1 },
+      data: { yn: 0, deletedAt: nowMs() },
     });
     return result.count > 0;
   }

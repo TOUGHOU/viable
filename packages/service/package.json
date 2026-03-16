@@ -6,6 +6,7 @@
     "postinstall": "prisma generate",
     "build": "pnpm exec nest build",
     "start": "pnpm exec nest start",
+    "dev": "pnpm exec nest start --watch",
     "start:dev": "pnpm exec nest start --watch",
     "start:debug": "pnpm exec nest start --debug --watch",
     "lint": "pnpm exec eslint \"{src,apps,libs,test}/**/*.ts\" --max-warnings 0",

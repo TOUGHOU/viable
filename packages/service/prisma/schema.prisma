@@ -1,3 +1,4 @@
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -6,38 +7,148 @@ datasource db {
   provider = "sqlite"
 }
 
-/// 会话：一次对话会话，可关联预览沙箱
-model Conversation {
-  id            String   @id
-  title         String   @default("新对话")
-  updatedAt     DateTime @updatedAt
-  hasPreview    Boolean  @default(false)
+/// 用户：支持匿名与登录用户，记录项目创建限额
+model User {
+  id           String   @id
+  createdAt    Int      /// Unix 时间戳毫秒
+  lastSeenAt   Int      /// 最后活跃时间，用于清理闲置用户
+  projectLimit Int      @default(1) /// 允许创建的项目数量限制
+  yn           Int      @default(1) /// 1=正常 0=软删除
+  deletedAt    Int?     /// 删除时间 Unix 毫秒，NULL=未删除
+
+  projects Project[]
+
+  @@index([lastSeenAt])
+  @@index([yn])
+  @@map("users")
+}
+
+/// 模板：模板市场预置项目模板
+model Template {
+  id           String  @id
+  name         String
+  description  String?
+  category     String
+  thumbnail    String?
+  starterFiles String? /// JSON 快照，模板预置代码
+  prompt       String?
+  isPublic     Int     @default(1) /// 1=公开 0=私有
+  createdAt    Int
+  yn           Int     @default(1)
+  deletedAt    Int?
+
+  projects Project[]
+
+  @@index([category])
+  @@index([isPublic])
+  @@index([yn])
+  @@map("templates")
+}
+
+/// 项目：一次对话对应一个项目，受用户 project_limit 限制
+model Project {
+  id               String   @id
+  userId           String
+  name             String
+  description      String?
+  templateId       String?
+  framework        String   @default("react")
+  styling          String   @default("tailwind")
+  currentVersionId String?
+  createdAt        Int
+  updatedAt        Int
+  yn               Int      @default(1)
+  deletedAt        Int?
+  /// 预览相关（与原有 conversation 预览能力一致）
+  hasPreview    Boolean @default(false)
   previewPort   Int?
   previewUrl    String?
   sandboxId     String?
-  previewStatus String   @default("pending") // pending | running | failed
-  yn            Int      @default(1) // 1=有效 0=软删除
+  previewStatus String  @default("pending") /// pending | running | failed
 
-  messages Message[]
+  user             User      @relation(fields: [userId], references: [id])
+  template         Template? @relation(fields: [templateId], references: [id])
+  currentVersion   Version?  @relation("ProjectCurrentVersion", fields: [currentVersionId], references: [id])
+  versions         Version[]
+  chatMessages     ChatMessage[]
 
-  @@map("conversations")
+  @@index([userId])
+  @@index([templateId])
+  @@index([yn])
+  @@index([userId, yn])
+  @@map("projects")
 }
 
-/// 消息：会话下的一条用户或助手消息
-model Message {
+/// 版本元数据：每次修改生成新版本，差异在 version_diffs
+model Version {
   id              String   @id
-  conversationId  String
-  role            String   // user | assistant
-  content         String
-  contentFormat   String?  @default("text") // text | markdown
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  model          String?
-  metadata       String?  // JSON 字符串，SQLite 无原生 JSON
-  yn              Int      @default(1) // 1=有效 0=软删除
+  projectId       String
+  versionNumber   Int      /// 项目内从 1 递增
+  baseVersionId   String?
+  prompt          String   /// 本次修改的用户提示词
+  aiResponse      String?
+  label           String?
+  hasFullSnapshot Int      @default(0) /// 1=全量快照 0=仅增量 diff
+  createdAt       Int
+  yn              Int      @default(1)
+  deletedAt       Int?
 
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  project          Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  baseVersion      Version?       @relation("VersionBase", fields: [baseVersionId], references: [id])
+  derivedVersions  Version[]      @relation("VersionBase")
+  projectsAsCurrent Project[]     @relation("ProjectCurrentVersion")
+  versionDiffs     VersionDiff[]
+  chatMessages     ChatMessage[]
 
-  @@index([conversationId])
-  @@map("messages")
+  @@unique([projectId, versionNumber])
+  @@index([projectId])
+  @@index([createdAt])
+  @@index([yn])
+  @@map("versions")
+}
+
+/// 版本增量：每个版本对应一条 diff，存储 added/modified/deleted
+model VersionDiff {
+  id        String @id
+  versionId String
+  changes   String /// JSON 差异内容
+  createdAt Int
+  yn        Int    @default(1)
+  deletedAt Int?
+
+  version Version @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@unique([versionId])
+  @@index([yn])
+  @@map("version_diffs")
+}
+
+/// 对话消息：数据驱动多种消息类型，assistant 可能关联 version_id（仅当产生代码变更时）
+model ChatMessage {
+  id              String  @id
+  projectId       String
+  conversationId  String  /// 与项目一对一时可等于 projectId
+  parentId        String?
+  role            String  /// user | assistant | system
+  messageType     String  @default("text") /// text | markdown | code | card | image | file | diff | suggestion
+  contentText     String?
+  contentJson     String?
+  metadata        String?
+  versionId       String? /// 产生代码变更的 assistant 消息关联版本
+  status          String  @default("sent") /// sending | sent | failed
+  createdAt       Int
+  updatedAt       Int
+  yn              Int     @default(1)
+  deletedAt       Int?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  version Version? @relation(fields: [versionId], references: [id])
+
+  @@index([projectId])
+  @@index([projectId, createdAt])
+  @@index([conversationId, createdAt])
+  @@index([parentId])
+  @@index([versionId])
+  @@index([yn])
+  @@map("chat_messages")
 }

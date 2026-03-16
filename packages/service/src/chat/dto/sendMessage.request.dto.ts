@@ -7,9 +7,9 @@ import { Type } from 'class-transformer';
 import { SelectedElementDto } from './selectedElement.dto';
 
 export class SendMessageRequestDto {
-  @IsNotEmpty({ message: 'conversationId 不能为空' })
+  @IsNotEmpty({ message: 'projectId 不能为空' })
   @IsString()
-  conversationId!: string;
+  projectId!: string;
 
   @IsNotEmpty({ message: 'content 不能为空' })
   @IsString()

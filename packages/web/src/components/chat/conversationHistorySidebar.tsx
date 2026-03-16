@@ -1,6 +1,6 @@
 /**
  * @file: conversationHistorySidebar.tsx
- * @description 历史对话列表容器
+ * @description 历史项目列表容器（一次对话即一个项目）
  */
 
 import { useEffect } from 'react';
@@ -10,14 +10,14 @@ import { Brand } from './brand';
 import { ButtonNewChat } from './buttonNewChat';
 import { ConversationHistoryItem } from './conversationHistoryItem';
 import { useChatStore } from '@/store/chatStore';
-import type { Conversation } from '@/types/chat';
-import { getConversations as getConversationsApi } from '@/lib/api/chatApi';
-import { createConversation as createConversationApi } from '@/lib/api/chatApi';
+import type { Project } from '@/types/chat';
+import { getProjects as getProjectsApi } from '@/lib/api/chatApi';
+import { createProject as createProjectApi } from '@/lib/api/chatApi';
 import { getMessages as getMessagesApi } from '@/lib/api/chatApi';
-import { updateConversation as updateConversationApi } from '@/lib/api/chatApi';
-import { deleteConversation as deleteConversationApi } from '@/lib/api/chatApi';
+import { updateProject as updateProjectApi } from '@/lib/api/chatApi';
+import { deleteProject as deleteProjectApi } from '@/lib/api/chatApi';
 
-const CONVERSATIONS_KEY = 'conversations';
+const PROJECTS_KEY = 'projects';
 
 export interface ConversationHistorySidebarProps {
   onNewChat: () => void;
@@ -26,64 +26,64 @@ export interface ConversationHistorySidebarProps {
 export function ConversationHistorySidebar({ onNewChat }: ConversationHistorySidebarProps) {
   const navigate = useNavigate();
   const {
-    conversations,
-    currentConversationId,
-    setCurrentConversationId,
-    setConversations,
+    projects,
+    currentProjectId,
+    setCurrentProjectId,
+    setProjects,
     setMessages,
     startNewChat,
   } = useChatStore();
 
   const { data, mutate } = useSWR(
-    CONVERSATIONS_KEY,
-    () => getConversationsApi({ page: 1, pageSize: 100 }),
+    PROJECTS_KEY,
+    () => getProjectsApi({ page: 1, pageSize: 100 }),
     { dedupingInterval: 2000 }
   );
 
   useEffect(() => {
     if (data?.data) {
-      setConversations(data.data);
+      setProjects(data.data);
     }
-  }, [data, setConversations]);
+  }, [data, setProjects]);
 
-  const handleSelect = async (c: Conversation) => {
-    setCurrentConversationId(c.id);
+  const handleSelect = async (p: Project) => {
+    setCurrentProjectId(p.id);
     try {
       const res = await getMessagesApi({
-        conversationId: c.id,
+        projectId: p.id,
         page: 1,
         pageSize: 100,
       });
-      setMessages(c.id, res.data);
+      setMessages(p.id, res.data);
     } catch {
-      setMessages(c.id, []);
+      setMessages(p.id, []);
     }
-    navigate(`/workspace/${c.id}`);
+    navigate(`/workspace/${p.id}`);
   };
 
-  const handleOpenPreview = (c: Conversation) => {
-    if (!c.hasPreview) return;
-    setCurrentConversationId(c.id);
-    navigate(`/workspace/${c.id}`);
+  const handleOpenPreview = (p: Project) => {
+    if (!p.hasPreview) return;
+    setCurrentProjectId(p.id);
+    navigate(`/workspace/${p.id}`);
   };
 
   const handleNewChatClick = async () => {
     try {
-      const conv = await createConversationApi({ title: '新对话', hasPreview: false });
-      setConversations([conv, ...conversations.filter((x) => x.id !== conv.id)]);
-      setCurrentConversationId(conv.id);
-      setMessages(conv.id, []);
-      navigate(`/workspace/${conv.id}`);
+      const project = await createProjectApi({ name: '新项目', hasPreview: false });
+      setProjects([project, ...projects.filter((x) => x.id !== project.id)]);
+      setCurrentProjectId(project.id);
+      setMessages(project.id, []);
+      navigate(`/workspace/${project.id}`);
       void mutate();
     } catch {
       onNewChat();
     }
   };
 
-  const handleRename = async (id: string, title: string) => {
+  const handleRename = async (id: string, name: string) => {
     try {
-      const updated = await updateConversationApi({ id, title });
-      setConversations(conversations.map((c) => (c.id === id ? updated : c)));
+      const updated = await updateProjectApi({ id, name });
+      setProjects(projects.map((p) => (p.id === id ? updated : p)));
       void mutate();
     } catch {
       // ignore
@@ -92,9 +92,9 @@ export function ConversationHistorySidebar({ onNewChat }: ConversationHistorySid
 
   const handleDelete = async (id: string) => {
     try {
-      await deleteConversationApi({ id });
-      setConversations(conversations.filter((c) => c.id !== id));
-      if (currentConversationId === id) {
+      await deleteProjectApi({ id });
+      setProjects(projects.filter((p) => p.id !== id));
+      if (currentProjectId === id) {
         startNewChat();
       }
       void mutate();
@@ -114,15 +114,15 @@ export function ConversationHistorySidebar({ onNewChat }: ConversationHistorySid
           历史对话
         </h2>
         <ul className="mt-1 space-y-2">
-          {conversations.map((c) => (
-            <li key={c.id}>
+          {projects.map((p) => (
+            <li key={p.id}>
               <ConversationHistoryItem
-                conversation={c}
-                isActive={currentConversationId === c.id}
-                onSelect={() => handleSelect(c)}
-                onOpenPreview={c.hasPreview ? () => handleOpenPreview(c) : undefined}
-                onRename={(title) => handleRename(c.id, title)}
-                onDelete={() => handleDelete(c.id)}
+                project={p}
+                isActive={currentProjectId === p.id}
+                onSelect={() => handleSelect(p)}
+                onOpenPreview={p.hasPreview ? () => handleOpenPreview(p) : undefined}
+                onRename={(name) => handleRename(p.id, name)}
+                onDelete={() => handleDelete(p.id)}
               />
             </li>
           ))}

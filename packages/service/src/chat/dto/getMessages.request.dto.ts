@@ -13,9 +13,9 @@ import {
 } from 'class-validator';
 
 export class GetMessagesRequestDto {
-  @IsNotEmpty({ message: 'conversationId 不能为空' })
+  @IsNotEmpty({ message: 'projectId 不能为空' })
   @IsString()
-  conversationId!: string;
+  projectId!: string;
 
   @IsOptional()
   @Type(() => Number)

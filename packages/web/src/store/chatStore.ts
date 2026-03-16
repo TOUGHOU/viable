@@ -1,34 +1,31 @@
 /**
  * @file: chatStore.ts
- * @description 对话与当前会话状态（Zustand），持久化到 localStorage
+ * @description 项目与当前项目状态（Zustand），持久化到 localStorage；一次对话即一个项目
  */
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Conversation, Message } from '@/types/chat';
+import type { Project, Message } from '@/types/chat';
 import type { SkillId } from '@/types/chat';
 
 function createId() {
   return Math.random().toString(36).slice(2, 11);
 }
 
-const MOCK_CONVERSATIONS: Conversation[] = [];
-
 interface ChatState {
-  conversations: Conversation[];
-  currentConversationId: string | null;
-  messagesByConversationId: Record<string, Message[]>;
+  projects: Project[];
+  currentProjectId: string | null;
+  messagesByProjectId: Record<string, Message[]>;
   selectedSkill: SkillId | null;
-  setCurrentConversationId: (id: string | null) => void;
+  setCurrentProjectId: (id: string | null) => void;
   setSelectedSkill: (skill: SkillId | null) => void;
-  addConversation: (c: Conversation) => void;
-  setConversations: (list: Conversation[]) => void;
-  /** 按 id 更新单个会话（用于轮询预览状态等） */
-  updateConversation: (id: string, data: Partial<Conversation>) => void;
-  addMessage: (conversationId: string, message: Message) => void;
-  setMessages: (conversationId: string, messages: Message[]) => void;
+  addProject: (p: Project) => void;
+  setProjects: (list: Project[]) => void;
+  updateProject: (id: string, data: Partial<Project>) => void;
+  addMessage: (projectId: string, message: Message) => void;
+  setMessages: (projectId: string, messages: Message[]) => void;
   startNewChat: () => void;
-  getMessages: (conversationId: string) => Message[];
+  getMessages: (projectId: string) => Message[];
 }
 
 const STORAGE_KEY = 'vibe-chat-storage';
@@ -36,67 +33,68 @@ const STORAGE_KEY = 'vibe-chat-storage';
 export const useChatStore = create<ChatState>()(
   persist(
     (set, get) => ({
-      conversations: MOCK_CONVERSATIONS,
-      currentConversationId: null,
-      messagesByConversationId: {},
+      projects: [],
+      currentProjectId: null,
+      messagesByProjectId: {},
       selectedSkill: null,
 
-      setCurrentConversationId: (id) => set({ currentConversationId: id }),
+      setCurrentProjectId: (id) => set({ currentProjectId: id }),
 
       setSelectedSkill: (skill) => set({ selectedSkill: skill }),
 
-      addConversation: (c) =>
+      addProject: (p) =>
         set((state) => ({
-          conversations: [c, ...state.conversations.filter((x) => x.id !== c.id)],
+          projects: [p, ...state.projects.filter((x) => x.id !== p.id)],
         })),
 
-      setConversations: (list) => set({ conversations: list }),
+      setProjects: (list) => set({ projects: list }),
 
-      updateConversation: (id, data) =>
+      updateProject: (id, data) =>
         set((state) => ({
-          conversations: state.conversations.map((c) =>
-            c.id === id ? { ...c, ...data } : c
+          projects: state.projects.map((p) =>
+            p.id === id ? { ...p, ...data } : p
           ),
         })),
 
-      addMessage: (conversationId, message) =>
+      addMessage: (projectId, message) =>
         set((state) => {
-          const prev = state.messagesByConversationId[conversationId] ?? [];
+          const prev = state.messagesByProjectId[projectId] ?? [];
           return {
-            messagesByConversationId: {
-              ...state.messagesByConversationId,
-              [conversationId]: [...prev, message],
+            messagesByProjectId: {
+              ...state.messagesByProjectId,
+              [projectId]: [...prev, message],
             },
           };
         }),
 
-      setMessages: (conversationId, messages) =>
+      setMessages: (projectId, messages) =>
         set((state) => ({
-          messagesByConversationId: {
-            ...state.messagesByConversationId,
-            [conversationId]: messages,
+          messagesByProjectId: {
+            ...state.messagesByProjectId,
+            [projectId]: messages,
           },
         })),
 
-      startNewChat: () => set({ currentConversationId: null }),
+      startNewChat: () => set({ currentProjectId: null }),
 
-      getMessages: (conversationId) => get().messagesByConversationId[conversationId] ?? [],
+      getMessages: (projectId) => get().messagesByProjectId[projectId] ?? [],
     }),
     {
       name: STORAGE_KEY,
       partialize: (state) => ({
-        conversations: state.conversations,
-        messagesByConversationId: state.messagesByConversationId,
+        projects: state.projects,
+        messagesByProjectId: state.messagesByProjectId,
       }),
     }
   )
 );
 
-export function createNewConversation(title: string, hasPreview = false): Conversation {
+export function createNewProject(name: string, hasPreview = false): Project {
   return {
     id: createId(),
-    title,
+    name,
     updatedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
     hasPreview,
   };
 }

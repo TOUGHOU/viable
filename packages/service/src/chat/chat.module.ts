@@ -19,7 +19,7 @@ import { PreviewService } from '../preview/preview.service';
     PreviewService,
     ChatService,
     {
-      provide: 'IChatStorage',
+      provide: 'IProjectStorage',
       useClass: ChatPrismaStorage,
     },
   ],

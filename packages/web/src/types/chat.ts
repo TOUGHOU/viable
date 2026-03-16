@@ -1,6 +1,6 @@
 /**
  * @file: chat.ts
- * @description 对话、消息、技能等类型定义
+ * @description 项目、对话消息、技能等类型定义（一次对话即一个项目）
  */
 
 export type SkillId = 'quick' | 'coding' | 'research' | 'image' | 'write' | 'video' | 'more';
@@ -11,29 +11,34 @@ export interface SkillItem {
   icon?: string;
 }
 
-export interface Conversation {
+/** 项目：一次对话对应一个项目 */
+export interface Project {
   id: string;
-  title: string;
-  updatedAt: string;
+  userId?: string;
+  name: string;
+  description?: string | null;
+  templateId?: string | null;
+  framework?: string;
+  styling?: string;
+  currentVersionId?: string | null;
+  createdAt: number | string;
+  updatedAt: number | string;
   hasPreview: boolean;
   unread?: number;
-  /** 预览端口，本期为 localhost */
   previewPort?: number;
-  /** 预览地址，本期为 http://localhost:${previewPort} */
-  previewUrl?: string;
-  /** 预览状态：pending 启动中，running 已就绪，failed 启动失败 */
+  previewUrl?: string | null;
   previewStatus?: 'pending' | 'running' | 'failed';
 }
 
-export type MessageRole = 'user' | 'assistant';
+/** 兼容旧字段：部分 API 仍返回 title，映射为 name */
+export type ProjectLike = Project & { title?: string };
 
-/** 消息内容格式：前端按 contentFormat 渲染（如 markdown 代码块、加粗等） */
+export type MessageRole = 'user' | 'assistant' | 'system';
+
 export type MessageContentFormat = 'text' | 'markdown';
 
-/** 发送/流式状态，仅前端使用，不持久化、不通过 API 同步 */
 export type MessageStatus = 'sending' | 'sent' | 'streaming' | 'failed';
 
-/** 预览中选中的元素，与 Inspector 上报结构一致，发送消息时带给接口 */
 export interface SelectedElement {
   id: string;
   name: string;
@@ -60,16 +65,14 @@ export interface Message {
   contentFormat?: MessageContentFormat;
   createdAt: string;
   updatedAt: string;
-  /** 助手消息由哪款模型生成，可选，预留多模型 */
   model?: string;
-  /** 扩展信息：token 用量、finish_reason 等，按需定义 */
   metadata?: Record<string, unknown>;
+  /** 仅 assistant 消息在产生代码变更时有值 */
+  versionId?: string | null;
 }
 
-/** 流式阶段：思考 / 工具调用中 / 输出内容 / 结束 */
 export type StreamPhase = 'thinking' | 'tool_calls' | 'content' | 'done';
 
-/** 单次工具调用状态（流式展示用） */
 export interface StreamToolCall {
   id: string;
   name: string;

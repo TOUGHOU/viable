@@ -5,9 +5,9 @@
 import { IsNotEmpty, IsString } from 'class-validator';
 
 export class DeleteMessageRequestDto {
-  @IsNotEmpty({ message: 'conversationId 不能为空' })
+  @IsNotEmpty({ message: 'projectId 不能为空' })
   @IsString()
-  conversationId!: string;
+  projectId!: string;
 
   @IsNotEmpty({ message: 'messageId 不能为空' })
   @IsString()

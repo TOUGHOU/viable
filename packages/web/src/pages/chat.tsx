@@ -3,10 +3,10 @@
  * @description 页面一：Chat 首页（左侧历史 + 右侧欢迎/对话 + 输入栏）
  */
 
-import { memo, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChatStore, createMessage } from '@/store/chatStore';
-import { createConversation as createConversationApi } from '@/lib/api/chatApi';
+import { createProject as createProjectApi } from '@/lib/api/chatApi';
 import { SidebarLayout } from '@/components/layout/sidebarLayout';
 import { ConversationHistorySidebar } from '@/components/chat/conversationHistorySidebar';
 import { ChatWelcome } from '@/components/chat/chatWelcome';
@@ -15,9 +15,9 @@ import { ThemeToggle } from '@/components/themeToggle';
 export function ChatPage() {
   const navigate = useNavigate();
   const {
-    currentConversationId,
-    setCurrentConversationId,
-    addConversation,
+    currentProjectId,
+    setCurrentProjectId,
+    addProject,
     addMessage,
     startNewChat,
   } = useChatStore();
@@ -31,15 +31,15 @@ export function ChatPage() {
 
   const handleQuickQuestion = async (text: string) => {
     try {
-      const conv = await createConversationApi({
-        title: text.slice(0, 30) || '新对话',
+      const project = await createProjectApi({
+        name: text.slice(0, 30) || '新项目',
         hasPreview: false,
       });
-      addConversation(conv);
-      setCurrentConversationId(conv.id);
-      addMessage(conv.id, createMessage('user', text));
+      addProject(project);
+      setCurrentProjectId(project.id);
+      addMessage(project.id, createMessage('user', text));
       setInput('');
-      navigate(`/workspace/${conv.id}`);
+      navigate(`/workspace/${project.id}`);
     } catch {
       setInput('');
     }
@@ -48,23 +48,23 @@ export function ChatPage() {
   const handleSend = async () => {
     const text = input.trim();
     if (!text) return;
-    let conversationId: string;
+    let projectId: string;
     try {
-      if (!currentConversationId) {
-        const conv = await createConversationApi({
-          title: text.slice(0, 30) || '新对话',
+      if (!currentProjectId) {
+        const project = await createProjectApi({
+          name: text.slice(0, 30) || '新项目',
           hasPreview: false,
         });
-        addConversation(conv);
-        setCurrentConversationId(conv.id);
-        addMessage(conv.id, createMessage('user', text));
-        conversationId = conv.id;
+        addProject(project);
+        setCurrentProjectId(project.id);
+        addMessage(project.id, createMessage('user', text));
+        projectId = project.id;
       } else {
-        addMessage(currentConversationId, createMessage('user', text));
-        conversationId = currentConversationId;
+        addMessage(currentProjectId, createMessage('user', text));
+        projectId = currentProjectId;
       }
       setInput('');
-      navigate(`/workspace/${conversationId}`);
+      navigate(`/workspace/${projectId}`);
     } catch {
       setInput('');
     }

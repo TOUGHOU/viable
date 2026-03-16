@@ -4,18 +4,11 @@
  * 遵循 Vercel React 实践：子组件按需订阅 store 减少重渲染、过渡动效、视觉分组
  */
 
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { Monitor, Smartphone, SquareDashedMousePointer, Tablet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useWorkspaceStore, type PreviewCodeTab, type DeviceType } from '@/store/workspaceStore';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '../themeToggle';
 
@@ -95,18 +88,9 @@ const CenterToolbarActions = memo(function CenterToolbarActions() {
 });
 
 /** 右侧版本/下载：纯展示与回调，无 store 订阅时可由父组件控制是否渲染 */
-const VERSION_OPTIONS = [
-  { value: 'v2', label: 'V2' },
-  { value: 'v1', label: 'V1' },
-] as const;
-
-const RightToolbarActions = memo(function RightToolbarActions({
-  showVersionSelect,
-}: {
+const RightToolbarActions = memo(function RightToolbarActions(_props: {
   showVersionSelect: boolean;
 }) {
-  const [version, setVersion] = useState<string>('v2');
-
   return (
     <div className="flex items-center gap-2">
       {/* {showVersionSelect ? (

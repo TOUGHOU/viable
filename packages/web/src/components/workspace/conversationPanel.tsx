@@ -15,13 +15,13 @@ import {
 } from '@/lib/api/chatApi';
 
 export interface ConversationPanelProps {
-  conversationId: string;
+  projectId: string;
   title?: string;
   useStream?: boolean;
 }
 
 export function ConversationPanel({
-  conversationId,
+  projectId,
   title,
   useStream = true,
 }: ConversationPanelProps) {
@@ -35,7 +35,7 @@ export function ConversationPanel({
   const [streamToolCalls, setStreamToolCalls] = useState<StreamToolCall[]>([]);
   const streamingIdRef = useRef<string | null>(null);
   const listScrollRef = useRef<HTMLDivElement>(null);
-  const messages = getMessages(conversationId);
+  const messages = getMessages(projectId);
   const selectedElements = useWorkspaceStore((s) => s.selectedElements);
   const setSelectedElements = useWorkspaceStore((s) => s.setSelectedElements);
 
@@ -58,7 +58,7 @@ export function ConversationPanel({
       setError(null);
       setLastFailedContent(null);
       const userMsg = createMessage('user', text);
-      addMessage(conversationId, userMsg);
+      addMessage(projectId, userMsg);
       setInput('');
       setSending(true);
       streamingIdRef.current = null;
@@ -72,7 +72,7 @@ export function ConversationPanel({
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
-        addMessage(conversationId, placeholderAssistant);
+        addMessage(projectId, placeholderAssistant);
         streamingIdRef.current = placeholderAssistant.id;
         setStreamingMessageId(placeholderAssistant.id);
         setStreamPhase(null);
@@ -81,7 +81,7 @@ export function ConversationPanel({
         try {
           await sendMessageStreamApi(
             {
-              conversationId,
+              projectId,
               content: text,
               selectedElements: selectedElements.length > 0 ? selectedElements : undefined,
             },
@@ -121,7 +121,7 @@ export function ConversationPanel({
               },
               onContent(chunk) {
                 startTransition(() => {
-                  const prev = getMessages(conversationId);
+                  const prev = getMessages(projectId);
                   let lastAssistantIndex = -1;
                   for (let i = prev.length - 1; i >= 0; i--) {
                     if (prev[i].role === 'assistant') {
@@ -134,7 +134,7 @@ export function ConversationPanel({
                   const last = { ...updated[lastAssistantIndex] };
                   last.content += chunk;
                   updated[lastAssistantIndex] = last;
-                  setMessages(conversationId, updated);
+                  setMessages(projectId, updated);
                 });
               },
               onAssistantMessage(assistantMessage) {
@@ -143,13 +143,13 @@ export function ConversationPanel({
                 setStreamingMessageId(null);
                 setStreamPhase(null);
                 setStreamToolCalls([]);
-                const prev = getMessages(conversationId);
+                const prev = getMessages(projectId);
                 const idx = prev.findIndex((m) => m.id === pid);
                 const next =
                   idx >= 0
                     ? prev.map((m, i) => (i === idx ? assistantMessage : m))
                     : [...prev, assistantMessage];
-                setMessages(conversationId, next);
+                setMessages(projectId, next);
                 setSelectedElements([]);
               },
               onError(msg) {
@@ -160,9 +160,9 @@ export function ConversationPanel({
                 setStreamingMessageId(null);
                 setStreamPhase(null);
                 setStreamToolCalls([]);
-                const prev = getMessages(conversationId);
+                const prev = getMessages(projectId);
                 setMessages(
-                  conversationId,
+                  projectId,
                   prev.filter((m) => m.id !== pid)
                 );
               },
@@ -173,9 +173,9 @@ export function ConversationPanel({
             setStreamingMessageId(null);
             setStreamPhase(null);
             setStreamToolCalls([]);
-            const prev = getMessages(conversationId);
+            const prev = getMessages(projectId);
             setMessages(
-              conversationId,
+              projectId,
               prev.filter((m) => m.id !== pid)
             );
           }
@@ -186,10 +186,10 @@ export function ConversationPanel({
           setStreamingMessageId(null);
           setStreamPhase(null);
           setStreamToolCalls([]);
-          const prev = getMessages(conversationId);
+          const prev = getMessages(projectId);
           const pid = streamingIdRef.current;
           setMessages(
-            conversationId,
+            projectId,
             prev.filter((m) => m.id !== userMsg.id && m.id !== (pid || ''))
           );
         } finally {
@@ -200,28 +200,28 @@ export function ConversationPanel({
 
       try {
         const { userMessage, assistantMessage } = await sendMessageApi({
-          conversationId,
+          projectId,
           content: text,
           selectedElements: selectedElements.length > 0 ? selectedElements : undefined,
         });
-        const prev = getMessages(conversationId);
+        const prev = getMessages(projectId);
         const withoutOptimistic = prev.filter((m) => m.id !== userMsg.id);
-        setMessages(conversationId, [...withoutOptimistic, userMessage, assistantMessage]);
+        setMessages(projectId, [...withoutOptimistic, userMessage, assistantMessage]);
         setSelectedElements([]);
       } catch (e) {
         const msg = e instanceof Error ? e.message : '发送失败';
         setError(msg);
         setLastFailedContent(text);
-        const prev = getMessages(conversationId);
+        const prev = getMessages(projectId);
         setMessages(
-          conversationId,
+          projectId,
           prev.filter((m) => m.id !== userMsg.id)
         );
       } finally {
         setSending(false);
       }
     },
-    [conversationId, useStream, sending, getMessages, setMessages, addMessage, selectedElements]
+    [projectId, useStream, sending, getMessages, setMessages, addMessage, selectedElements]
   );
 
   const handleSend = useCallback(() => {

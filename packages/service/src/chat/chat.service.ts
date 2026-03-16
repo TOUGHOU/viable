@@ -1,15 +1,17 @@
 /**
  * @file: chat.service.ts
  * @author houfujian houfujian@jd.com
- * @description 会话与消息业务逻辑，委托存储层 CRUD
+ * @description 项目与消息业务逻辑，委托存储层 CRUD；一次对话即一个项目，assistant 消息不一定产生版本
  */
 
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { ProjectLimitExceededException } from './projectLimit.exception';
+import { MessageNotFoundException, ProjectNotFoundException } from './chat.exception';
 import type { Response } from 'express';
 import type {
-  IChatStorage,
-  Conversation,
-  Message,
+  IProjectStorage,
+  Project,
+  ChatMessage,
   PreviewStatus,
 } from './storage/chat-storage.interface';
 import { LlmService } from '../llm/llm.service';
@@ -19,107 +21,131 @@ function createId(): string {
   return Math.random().toString(36).slice(2, 11);
 }
 
+function nowMs(): number {
+  return Date.now();
+}
+
 @Injectable()
 export class ChatService {
   constructor(
-    @Inject('IChatStorage') private readonly storage: IChatStorage,
+    @Inject('IProjectStorage') private readonly storage: IProjectStorage,
     private readonly llmService: LlmService,
     private readonly previewService: PreviewService
   ) {}
 
-  async createConversation(data: { title?: string; hasPreview?: boolean }): Promise<Conversation> {
-    const conversation = await this.storage.createConversation(data);
-    this.previewService.setupPreview(conversation.id);
-
-    const now = new Date().toISOString();
-    const welcomeMessage: Message = {
+  async createProject(data: {
+    userId?: string;
+    name?: string;
+    templateId?: string | null;
+    hasPreview?: boolean;
+  }): Promise<Project> {
+    const user = await this.storage.getOrCreateUser(data.userId);
+    const { data: projects } = await this.storage.getProjects(user.id, {
+      page: 1,
+      pageSize: user.projectLimit + 1,
+    });
+    if (projects.length >= user.projectLimit) {
+      throw new ProjectLimitExceededException(user.projectLimit);
+    }
+    const project = await this.storage.createProject({
+      userId: user.id,
+      name: data.name ?? '新项目',
+      templateId: data.templateId ?? null,
+      hasPreview: data.hasPreview ?? false,
+    });
+    this.previewService.setupPreview(project.id);
+    const welcomeMessage: ChatMessage = {
       id: createId(),
+      projectId: project.id,
+      conversationId: project.id,
       role: 'user',
-      content: data.title ?? '新会话',
-      contentFormat: 'text',
-      createdAt: now,
-      updatedAt: now,
+      messageType: 'text',
+      contentText: data.name ?? '新项目',
+      status: 'sent',
+      createdAt: nowMs(),
+      updatedAt: nowMs(),
     };
-    await this.storage.addMessage(conversation.id, welcomeMessage);
-
-    return conversation;
+    await this.storage.addMessage(project.id, welcomeMessage);
+    return project;
   }
 
-  async getConversations(params: {
+  async getProjects(params: {
+    userId?: string;
     page?: number;
     pageSize?: number;
-  }): Promise<{ data: Conversation[]; meta: unknown }> {
-    return this.storage.getConversations({
+  }): Promise<{ data: Project[]; meta: unknown }> {
+    const user = await this.storage.getOrCreateUser(params.userId);
+    return this.storage.getProjects(user.id, {
       page: params.page ?? 1,
       pageSize: params.pageSize ?? 20,
     });
   }
 
-  async getConversation(id: string): Promise<Conversation> {
-    const conv = await this.storage.getConversation(id);
-    if (!conv) throw new NotFoundException('会话不存在');
-    return conv;
+  async getProject(id: string): Promise<Project> {
+    const project = await this.storage.getProject(id);
+    if (!project) throw new ProjectNotFoundException(id);
+    return project;
   }
 
-  async updateConversation(
+  async updateProject(
     id: string,
     data: {
-      title?: string;
+      name?: string;
       hasPreview?: boolean;
       previewPort?: number;
       previewUrl?: string;
       previewStatus?: PreviewStatus;
+      sandboxId?: string;
     }
-  ): Promise<Conversation> {
-    const conv = await this.storage.updateConversation(id, data);
-    if (!conv) throw new NotFoundException('会话不存在');
-    return conv;
+  ): Promise<Project> {
+    const project = await this.storage.updateProject(id, data);
+    if (!project) throw new ProjectNotFoundException(id);
+    return project;
   }
 
-  async deleteConversation(id: string): Promise<{ success: boolean }> {
+  async deleteProject(id: string): Promise<{ success: boolean }> {
     await this.previewService.stopPreview(id);
-    const ok = await this.storage.deleteConversation(id);
-    if (!ok) throw new NotFoundException('会话不存在');
+    const ok = await this.storage.deleteProject(id);
+    if (!ok) throw new ProjectNotFoundException(id);
     return { success: true };
   }
 
   async getMessages(
-    conversationId: string,
+    projectId: string,
     params: { page?: number; pageSize?: number }
-  ): Promise<{ data: Message[]; meta: unknown }> {
-    await this.getConversation(conversationId);
-    return this.storage.getMessages(conversationId, {
+  ): Promise<{ data: ChatMessage[]; meta: unknown }> {
+    await this.getProject(projectId);
+    return this.storage.getMessages(projectId, {
       page: params.page ?? 1,
       pageSize: params.pageSize ?? 50,
     });
   }
 
-  async getMessage(conversationId: string, messageId: string): Promise<Message> {
-    await this.getConversation(conversationId);
-    const msg = await this.storage.getMessage(conversationId, messageId);
-    if (!msg) throw new NotFoundException('消息不存在');
+  async getMessage(projectId: string, messageId: string): Promise<ChatMessage> {
+    await this.getProject(projectId);
+    const msg = await this.storage.getMessage(projectId, messageId);
+    if (!msg) throw new MessageNotFoundException(projectId, messageId);
     return msg;
   }
 
   async updateMessage(
-    conversationId: string,
+    projectId: string,
     messageId: string,
     content: string
-  ): Promise<Message> {
-    const msg = await this.storage.updateMessage(conversationId, messageId, content);
-    if (!msg) throw new NotFoundException('消息不存在');
-    await this.storage.updateConversation(conversationId, {});
+  ): Promise<ChatMessage> {
+    const msg = await this.storage.updateMessage(projectId, messageId, content);
+    if (!msg) throw new MessageNotFoundException(projectId, messageId);
     return msg;
   }
 
-  async deleteMessage(conversationId: string, messageId: string): Promise<{ success: boolean }> {
-    const ok = await this.storage.deleteMessage(conversationId, messageId);
-    if (!ok) throw new NotFoundException('消息不存在');
+  async deleteMessage(projectId: string, messageId: string): Promise<{ success: boolean }> {
+    const ok = await this.storage.deleteMessage(projectId, messageId);
+    if (!ok) throw new MessageNotFoundException(projectId, messageId);
     return { success: true };
   }
 
   async sendMessage(params: {
-    conversationId: string;
+    projectId: string;
     content: string;
     selectedElements?: Array<{
       id: string;
@@ -139,49 +165,58 @@ export class ChatService {
         bottom: number;
       };
     }>;
-  }): Promise<{ userMessage: Message; assistantMessage: Message }> {
-    const { conversationId, content, selectedElements } = params;
-    const conv = await this.getConversation(conversationId);
-    const { data: history } = await this.storage.getMessages(conversationId, {
+  }): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage }> {
+    const { projectId, content, selectedElements } = params;
+    const project = await this.getProject(projectId);
+    const { data: history } = await this.storage.getMessages(projectId, {
       page: 1,
       pageSize: 50,
     });
 
-    const now = new Date().toISOString();
-    const userMessage: Message = {
+    const now = nowMs();
+    const userMessage: ChatMessage = {
       id: createId(),
+      projectId,
+      conversationId: project.id,
       role: 'user',
-      content,
-      contentFormat: 'text',
+      messageType: 'text',
+      contentText: content,
+      status: 'sent',
       createdAt: now,
       updatedAt: now,
     };
-    await this.storage.addMessage(conversationId, userMessage);
+    await this.storage.addMessage(projectId, userMessage);
 
-    const workspaceRoot = conv.previewUrl
-      ? this.previewService.getPreviewDir(conversationId)
+    const workspaceRoot = project.previewUrl
+      ? this.previewService.getPreviewDir(projectId)
       : undefined;
+    const historyForLlm = history.map((m) => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.contentText ?? '',
+    }));
     let assistantContent = '';
     for await (const event of this.llmService.streamChat({
       content,
-      history,
+      history: historyForLlm,
       workspaceRoot,
       selectedElements,
     })) {
       if (event.type === 'content') assistantContent += event.chunk;
     }
 
-    const assistantMessage: Message = {
+    const assistantMessage: ChatMessage = {
       id: createId(),
+      projectId,
+      conversationId: project.id,
       role: 'assistant',
-      content: assistantContent,
-      contentFormat: 'markdown',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      model: process.env.LLM_MODEL,
+      messageType: 'markdown',
+      contentText: assistantContent,
+      versionId: null,
+      status: 'sent',
+      createdAt: nowMs(),
+      updatedAt: nowMs(),
     };
-    await this.storage.addMessage(conversationId, assistantMessage);
-    await this.storage.updateConversation(conversationId, {});
+    await this.storage.addMessage(projectId, assistantMessage);
 
     return { userMessage, assistantMessage };
   }
@@ -189,7 +224,7 @@ export class ChatService {
   async sendMessageStream(
     res: Response,
     params: {
-      conversationId: string;
+      projectId: string;
       content: string;
       selectedElements?: Array<{
         id: string;
@@ -211,23 +246,26 @@ export class ChatService {
       }>;
     }
   ): Promise<void> {
-    const { conversationId, content, selectedElements } = params;
-    const conv = await this.getConversation(conversationId);
-    const { data: history } = await this.storage.getMessages(conversationId, {
+    const { projectId, content, selectedElements } = params;
+    const project = await this.getProject(projectId);
+    const { data: history } = await this.storage.getMessages(projectId, {
       page: 1,
       pageSize: 50,
     });
 
-    const now = new Date().toISOString();
-    const userMessage: Message = {
+    const now = nowMs();
+    const userMessage: ChatMessage = {
       id: createId(),
+      projectId,
+      conversationId: project.id,
       role: 'user',
-      content,
-      contentFormat: 'text',
+      messageType: 'text',
+      contentText: content,
+      status: 'sent',
       createdAt: now,
       updatedAt: now,
     };
-    await this.storage.addMessage(conversationId, userMessage);
+    await this.storage.addMessage(projectId, userMessage);
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -244,16 +282,29 @@ export class ChatService {
       res.write('\n');
     };
 
-    sendEvent('user_message', userMessage);
+    const toMessagePayload = (m: ChatMessage) => ({
+      id: m.id,
+      role: m.role,
+      content: m.contentText ?? '',
+      contentFormat: m.messageType === 'markdown' ? 'markdown' : 'text',
+      createdAt: new Date(m.createdAt).toISOString(),
+      updatedAt: new Date(m.updatedAt).toISOString(),
+      versionId: m.versionId ?? undefined,
+    });
+    sendEvent('user_message', toMessagePayload(userMessage));
 
-    const workspaceRoot = conv.previewUrl
-      ? this.previewService.getPreviewDir(conversationId)
+    const workspaceRoot = project.previewUrl
+      ? this.previewService.getPreviewDir(projectId)
       : undefined;
+    const historyForLlm = history.map((m) => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.contentText ?? '',
+    }));
     let fullContent = '';
     try {
       for await (const event of this.llmService.streamChat({
         content,
-        history,
+        history: historyForLlm,
         workspaceRoot,
         selectedElements,
       })) {
@@ -289,19 +340,21 @@ export class ChatService {
       return;
     }
 
-    const assistantMessage: Message = {
+    const assistantMessage: ChatMessage = {
       id: createId(),
+      projectId,
+      conversationId: project.id,
       role: 'assistant',
-      content: fullContent,
-      contentFormat: 'markdown',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      model: process.env.LLM_MODEL,
+      messageType: 'markdown',
+      contentText: fullContent,
+      versionId: null,
+      status: 'sent',
+      createdAt: nowMs(),
+      updatedAt: nowMs(),
     };
-    await this.storage.addMessage(conversationId, assistantMessage);
-    await this.storage.updateConversation(conversationId, {});
+    await this.storage.addMessage(projectId, assistantMessage);
 
-    sendEvent('assistant_message', assistantMessage);
+    sendEvent('assistant_message', toMessagePayload(assistantMessage));
     res.end();
   }
 }

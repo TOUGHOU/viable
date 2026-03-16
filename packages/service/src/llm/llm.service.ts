@@ -8,7 +8,11 @@ import { Injectable, Logger, OnModuleInit, ServiceUnavailableException } from '@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import OpenAI from 'openai';
-import type { Message } from '../chat/storage/chat-storage.interface';
+/** 对话历史项，仅需 role 与 content 供 LLM 使用 */
+interface ChatHistoryMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
 import { ToolsService } from './tools.service';
 
 const AGENT_MAX_TURNS = 15;
@@ -238,7 +242,7 @@ export class LlmService implements OnModuleInit {
    */
   async *streamChat(params: {
     content: string;
-    history: Message[];
+    history: ChatHistoryMessage[];
     workspaceRoot?: string;
     selectedElements?: Array<{
       id: string;
@@ -259,7 +263,7 @@ export class LlmService implements OnModuleInit {
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = history.map((m) => ({
       role: m.role as 'user' | 'assistant' | 'system',
       content: m.content,
-    }));
+    })) as OpenAI.Chat.ChatCompletionMessageParam[];
 
     if (workspaceRoot) {
       const systemPrompt = await this.loadCodingAgentPrompt();

@@ -1,47 +1,51 @@
 /**
  * @file: conversationHistoryItem.tsx
- * @description 单条历史：图标、标题、角标、重命名、删除
+ * @description 单条历史项目：图标、名称、角标、重命名、删除
  */
 
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import type { Conversation } from '@/types/chat';
+import type { Project } from '@/types/chat';
 import { MessageCircleCode, Trash } from 'lucide-react';
 
 export interface ConversationHistoryItemProps {
-  conversation: Conversation;
+  project: Project;
   isActive?: boolean;
   onSelect: () => void;
   onOpenPreview?: () => void;
-  onRename?: (title: string) => void;
+  onRename?: (name: string) => void;
   onDelete?: () => void;
   className?: string;
 }
 
 export function ConversationHistoryItem({
-  conversation,
+  project,
   isActive,
   onSelect,
-  onOpenPreview,
   onRename,
   onDelete,
   className,
 }: ConversationHistoryItemProps) {
+  const displayName = project.name ?? (project as Project & { title?: string }).title ?? '新项目';
   const [editing, setEditing] = useState(false);
-  const [editTitle, setEditTitle] = useState(conversation.title);
+  const [editName, setEditName] = useState(displayName);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setEditName(displayName);
+  }, [displayName]);
 
   useEffect(() => {
     if (editing) inputRef.current?.focus();
   }, [editing]);
 
   const submitRename = () => {
-    const t = editTitle.trim();
-    if (t && t !== conversation.title && onRename) {
+    const t = editName.trim();
+    if (t && t !== displayName && onRename) {
       onRename(t);
     } else {
-      setEditTitle(conversation.title);
+      setEditName(displayName);
     }
     setEditing(false);
   };
@@ -60,7 +64,7 @@ export function ConversationHistoryItem({
         if (editing) {
           if (e.key === 'Enter') submitRename();
           if (e.key === 'Escape') {
-            setEditTitle(conversation.title);
+            setEditName(displayName);
             setEditing(false);
           }
           return;
@@ -81,8 +85,8 @@ export function ConversationHistoryItem({
         <input
           ref={inputRef}
           type="text"
-          value={editTitle}
-          onChange={(e) => setEditTitle(e.target.value)}
+          value={editName}
+          onChange={(e) => setEditName(e.target.value)}
           onBlur={submitRename}
           className="min-w-0 flex-1 rounded border border-input bg-card/80 px-1.5 py-0.5 text-sm outline-none focus:ring-1 focus:ring-accent/50 focus:border-accent/40"
           onClick={(e) => e.stopPropagation()}
@@ -93,17 +97,17 @@ export function ConversationHistoryItem({
           onDoubleClick={(e) => {
             e.stopPropagation();
             if (onRename) {
-              setEditTitle(conversation.title);
+              setEditName(displayName);
               setEditing(true);
             }
           }}
         >
-          {conversation.title}
+          {displayName}
         </span>
       )}
-      {conversation.unread != null && conversation.unread > 0 && (
+      {project.unread != null && project.unread > 0 && (
         <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-destructive px-1.5 text-xs text-destructive-foreground">
-          {conversation.unread}
+          {project.unread}
         </span>
       )}
       {onDelete && (

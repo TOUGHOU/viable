@@ -1,10 +1,10 @@
 /**
  * @file chatApi.ts
  * @author houfujian houfujian@jd.com
- * @description 对话相关 API，统一 POST，baseURL 由环境变量或默认值
+ * @description 项目与对话相关 API，统一 POST；一次对话即一个项目
  */
 
-import type { Conversation, Message, SelectedElement, StreamPhase } from '@/types/chat';
+import type { Project, Message, SelectedElement, StreamPhase } from '@/types/chat';
 
 const BASE_URL =
   (typeof import.meta !== 'undefined' &&
@@ -46,27 +46,67 @@ async function request<T>(
   return undefined as unknown as T;
 }
 
-export async function createConversation(body: {
-  title?: string;
-  hasPreview?: boolean;
-} = {}): Promise<Conversation> {
-  return request<Conversation>('/chat/createConversation', body);
+function toProject(p: Record<string, unknown>): Project {
+  const createdAt = p.createdAt as number | string;
+  const updatedAt = p.updatedAt as number | string;
+  return {
+    ...p,
+    name: (p.name as string) ?? (p.title as string) ?? '新项目',
+    createdAt: typeof createdAt === 'number' ? new Date(createdAt).toISOString() : createdAt,
+    updatedAt: typeof updatedAt === 'number' ? new Date(updatedAt).toISOString() : updatedAt,
+  } as Project;
 }
 
-export interface GetConversationsResult {
-  data: Conversation[];
+function toMessage(m: Record<string, unknown>): Message {
+  const createdAt = m.createdAt as number | string;
+  const updatedAt = m.updatedAt as number | string;
+  return {
+    id: m.id as string,
+    role: m.role as Message['role'],
+    content: (m.content as string) ?? (m.contentText as string) ?? '',
+    contentFormat: ((m.contentFormat as string) ?? ((m.messageType as string) === 'markdown' ? 'markdown' : 'text')) as Message['contentFormat'],
+    createdAt: typeof createdAt === 'number' ? new Date(createdAt).toISOString() : String(createdAt),
+    updatedAt: typeof updatedAt === 'number' ? new Date(updatedAt).toISOString() : String(updatedAt),
+    model: m.model as string | undefined,
+    metadata: m.metadata as Record<string, unknown> | undefined,
+    versionId: m.versionId as string | null | undefined,
+  };
+}
+
+export async function createProject(body: {
+  title?: string;
+  name?: string;
+  templateId?: string;
+  userId?: string;
+  hasPreview?: boolean;
+} = {}): Promise<Project> {
+  const res = await request<Record<string, unknown>>('/chat/createProject', body);
+  return toProject(res as Record<string, unknown>);
+}
+
+export interface GetProjectsResult {
+  data: Project[];
   meta: { total: number; page: number; pageSize: number; totalPages: number };
 }
 
-export async function getConversations(body: {
+export async function getProjects(body: {
+  userId?: string;
   page?: number;
   pageSize?: number;
-} = {}): Promise<GetConversationsResult> {
-  return request<GetConversationsResult>('/chat/getConversations', body);
+} = {}): Promise<GetProjectsResult> {
+  const res = await request<{ data: Record<string, unknown>[]; meta: GetProjectsResult['meta'] }>(
+    '/chat/getProjects',
+    body
+  );
+  return {
+    data: (res.data ?? []).map((p) => toProject(p)),
+    meta: res.meta!,
+  };
 }
 
-export async function getConversation(body: { id: string }): Promise<Conversation> {
-  return request<Conversation>('/chat/getConversation', body);
+export async function getProject(body: { id: string }): Promise<Project> {
+  const res = await request<Record<string, unknown>>('/chat/getProject', body);
+  return toProject(res as Record<string, unknown>);
 }
 
 export interface GetMessagesResult {
@@ -75,47 +115,56 @@ export interface GetMessagesResult {
 }
 
 export async function getMessages(body: {
-  conversationId: string;
+  projectId: string;
   page?: number;
   pageSize?: number;
 }): Promise<GetMessagesResult> {
-  return request<GetMessagesResult>('/chat/getMessages', body);
+  const res = await request<{ data: Record<string, unknown>[]; meta: GetMessagesResult['meta'] }>(
+    '/chat/getMessages',
+    body
+  );
+  return {
+    data: (res.data ?? []).map(toMessage),
+    meta: res.meta!,
+  };
 }
 
-export async function updateConversation(body: {
+export async function updateProject(body: {
   id: string;
+  name?: string;
   title?: string;
   hasPreview?: boolean;
   previewPort?: number;
   previewUrl?: string;
   previewStatus?: 'pending' | 'running' | 'failed';
-}): Promise<Conversation> {
-  return request<Conversation>('/chat/updateConversation', body);
+}): Promise<Project> {
+  const res = await request<Record<string, unknown>>('/chat/updateProject', body);
+  return toProject(res as Record<string, unknown>);
 }
 
-export async function deleteConversation(body: {
-  id: string;
-}): Promise<{ success?: boolean }> {
-  return request('/chat/deleteConversation', body);
+export async function deleteProject(body: { id: string }): Promise<{ success?: boolean }> {
+  return request('/chat/deleteProject', body);
 }
 
 export async function getMessage(body: {
-  conversationId: string;
+  projectId: string;
   messageId: string;
 }): Promise<Message> {
-  return request<Message>('/chat/getMessage', body);
+  const res = await request<Record<string, unknown>>('/chat/getMessage', body);
+  return toMessage(res as Record<string, unknown>);
 }
 
 export async function updateMessage(body: {
-  conversationId: string;
+  projectId: string;
   messageId: string;
   content: string;
 }): Promise<Message> {
-  return request<Message>('/chat/updateMessage', body);
+  const res = await request<Record<string, unknown>>('/chat/updateMessage', body);
+  return toMessage(res as Record<string, unknown>);
 }
 
 export async function deleteMessage(body: {
-  conversationId: string;
+  projectId: string;
   messageId: string;
 }): Promise<{ success?: boolean }> {
   return request('/chat/deleteMessage', body);
@@ -127,15 +176,22 @@ export interface SendMessageResult {
 }
 
 export async function sendMessage(body: {
-  conversationId: string;
+  projectId: string;
   content: string;
   selectedElements?: SelectedElement[];
 }): Promise<SendMessageResult> {
-  return request<SendMessageResult>('/chat/sendMessage', body);
+  const res = await request<{
+    userMessage: Record<string, unknown>;
+    assistantMessage: Record<string, unknown>;
+  }>('/chat/sendMessage', body);
+  return {
+    userMessage: toMessage(res.userMessage),
+    assistantMessage: toMessage(res.assistantMessage),
+  };
 }
 
 export async function sendMessageStream(
-  body: { conversationId: string; content: string; selectedElements?: SelectedElement[] },
+  body: { projectId: string; content: string; selectedElements?: SelectedElement[] },
   callbacks: {
     onUserMessage?: (message: Message) => void;
     onContent?: (chunk: string) => void;
@@ -177,7 +233,7 @@ export async function sendMessageStream(
     }
     try {
       if (currentEvent === 'user_message' && callbacks.onUserMessage) {
-        callbacks.onUserMessage(JSON.parse(data) as Message);
+        callbacks.onUserMessage(toMessage(JSON.parse(data) as Record<string, unknown>));
       } else if (currentEvent === 'content' && callbacks.onContent) {
         try {
           const parsed = JSON.parse(data) as string;
@@ -195,7 +251,7 @@ export async function sendMessageStream(
         const obj = JSON.parse(data) as { id: string; name: string; success: boolean; resultSummary?: string };
         callbacks.onToolCallEnd(obj);
       } else if (currentEvent === 'assistant_message' && callbacks.onAssistantMessage) {
-        callbacks.onAssistantMessage(JSON.parse(data) as Message);
+        callbacks.onAssistantMessage(toMessage(JSON.parse(data) as Record<string, unknown>));
       } else if (currentEvent === 'error' && callbacks.onError) {
         const obj = JSON.parse(data) as { message?: string };
         callbacks.onError(obj.message || data);

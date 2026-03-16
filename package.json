@@ -5,7 +5,9 @@
   "version": "0.0.0",
   "description": "Vibe coding product - monorepo",
   "scripts": {
-    "dev": "pnpm -r --parallel run dev",
+    "dev": "pnpm --filter @vibe/web --filter @vibe/service run dev",
+    "dev:web": "pnpm --filter @vibe/web run dev",
+    "dev:service": "pnpm --filter @vibe/service run dev",
     "build": "pnpm -r run build",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",

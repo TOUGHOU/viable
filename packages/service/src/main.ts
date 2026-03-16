@@ -11,10 +11,14 @@ config({ path: '.env.local', override: true });
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { traceMiddleware } from './common/middleware/trace.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const port = process.env.PORT ?? 3000;
+
+  app.use(traceMiddleware);
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -23,6 +27,8 @@ async function bootstrap() {
       transformOptions: { enableImplicitConversion: true },
     })
   );
+
+  app.useGlobalFilters(new GlobalExceptionFilter());
 
   app.enableCors({
     origin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',

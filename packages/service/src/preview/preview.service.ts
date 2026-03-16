@@ -6,7 +6,7 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import * as path from 'node:path';
-import type { IChatStorage } from '../chat/storage/chat-storage.interface';
+import type { IProjectStorage } from '../chat/storage/chat-storage.interface';
 import { readDirectoryFilesRecursive } from '../utils/file';
 import { SandboxService, SANDBOX_APP_PATH, type FileEntry } from './sandbox.service';
 
@@ -19,7 +19,7 @@ export class PreviewService {
   private readonly templatePath: string;
 
   constructor(
-    @Inject('IChatStorage') private readonly storage: IChatStorage,
+    @Inject('IProjectStorage') private readonly storage: IProjectStorage,
     private readonly sandboxService: SandboxService
   ) {
     const repoRoot = path.resolve(__dirname, ...Array(REPO_ROOT_UP_LEVELS).fill('..'));
@@ -28,24 +28,24 @@ export class PreviewService {
   }
 
   /**
-   * 获取某会话的预览工作区路径（沙箱内路径），供 coding agent 工具使用；若需标识为 E2B 工作区，可返回 e2b://conversationId
+   * 获取某项目的预览工作区路径（沙箱内路径），供 coding agent 工具使用；若需标识为 E2B 工作区，可返回 e2b://projectId
    */
-  getPreviewDir(conversationId: string): string {
-    return `e2b://${conversationId}`;
+  getPreviewDir(projectId: string): string {
+    return `e2b://${projectId}`;
   }
 
   /**
-   * 创建对话后调用：读模板、写沙箱、安装、启动，完成后更新会话的 previewUrl / previewStatus
+   * 创建项目后调用：读模板、写沙箱、安装、启动，完成后更新项目的 previewUrl / previewStatus
    */
-  setupPreview(conversationId: string): void {
-    this.runSetup(conversationId).catch((err) => {
+  setupPreview(projectId: string): void {
+    this.runSetup(projectId).catch((err) => {
       const message = err instanceof Error ? err.message : String(err);
       const extra =
         err &&
         typeof err === 'object' &&
         (err as Error & { stdout?: string; stderr?: string; exitCode?: number });
-      this.storage.updateConversation(conversationId, { previewStatus: 'failed' }).catch(() => {});
-      console.error(`[Preview] setup failed for ${conversationId}:`, message);
+      this.storage.updateProject(projectId, { previewStatus: 'failed' }).catch(() => {});
+      console.error(`[Preview] setup failed for ${projectId}:`, message);
       if (extra?.stdout) console.error(`[Preview] stdout:`, extra.stdout);
       if (extra?.stderr) console.error(`[Preview] stderr:`, extra.stderr);
       if (extra?.exitCode != null) console.error(`[Preview] exitCode:`, extra.exitCode);
@@ -54,30 +54,30 @@ export class PreviewService {
   }
 
   /**
-   * 删除对话时调用：关闭沙箱并清除会话中记录的 sandboxId（避免下次误连已关闭的沙箱）
+   * 删除项目时调用：关闭沙箱并清除项目中记录的 sandboxId（避免下次误连已关闭的沙箱）
    */
-  async stopPreview(conversationId: string): Promise<void> {
-    await this.sandboxService.closeSandbox(conversationId);
+  async stopPreview(projectId: string): Promise<void> {
+    await this.sandboxService.closeSandbox(projectId);
     await this.storage
-      .updateConversation(conversationId, { sandboxId: undefined })
+      .updateProject(projectId, { sandboxId: undefined })
       .catch(() => {});
   }
 
-  private async runSetup(conversationId: string): Promise<void> {
+  private async runSetup(projectId: string): Promise<void> {
     const log = (msg: string, ...args: unknown[]) =>
-      console.log(`[Preview] ${conversationId} ${msg}`, ...args);
+      console.log(`[Preview] ${projectId} ${msg}`, ...args);
 
     log('runSetup start, templatePath:', this.templatePath);
 
-    const conv = await this.storage.getConversation(conversationId);
-    const existingSandboxId = conv?.sandboxId;
+    const project = await this.storage.getProject(projectId);
+    const existingSandboxId = project?.sandboxId;
 
     const { sandboxId, recreated } = await this.sandboxService.ensureSandbox(
-      conversationId,
-      existingSandboxId
+      projectId,
+      existingSandboxId ?? undefined
     );
     if (recreated && sandboxId) {
-      await this.storage.updateConversation(conversationId, { sandboxId });
+      await this.storage.updateProject(projectId, { sandboxId });
     }
     log('ensureSandbox done, sandboxId=', sandboxId, 'recreated=', recreated);
 
@@ -87,19 +87,19 @@ export class PreviewService {
       throw new Error(`Template is empty or not found: ${this.templatePath}`);
     }
 
-    await this.sandboxService.writeFiles(conversationId, SANDBOX_APP_PATH, files);
+    await this.sandboxService.writeFiles(projectId, SANDBOX_APP_PATH, files);
     log('writeFiles done');
 
-    await this.sandboxService.installDependencies(conversationId, SANDBOX_APP_PATH);
+    await this.sandboxService.installDependencies(projectId, SANDBOX_APP_PATH);
     log('installDependencies done');
 
     const previewUrl = await this.sandboxService.startDevServerAndGetPreviewUrl(
-      conversationId,
+      projectId,
       SANDBOX_APP_PATH
     );
     log('startDevServerAndGetPreviewUrl done, previewUrl:', previewUrl);
 
-    await this.storage.updateConversation(conversationId, {
+    await this.storage.updateProject(projectId, {
       previewUrl,
       previewStatus: 'running',
     });

@@ -1,35 +1,55 @@
 /**
  * @file chat-storage.interface.ts
  * @author houfujian houfujian@jd.com
- * @description 会话与消息存储抽象，本期实现为文件存储，后续可替换为 DB
+ * @description 项目与消息存储抽象，支持用户、项目、版本、对话消息
  */
 
 export type PreviewStatus = 'pending' | 'running' | 'failed';
 
-export interface Conversation {
+/** 用户（匿名或登录），用于项目限额等 */
+export interface User {
   id: string;
-  title: string;
-  updatedAt: string;
-  hasPreview?: boolean;
-  /** 预览进程端口，启动成功后写入 */
-  previewPort?: number;
-  /** 预览地址，本期为 http://localhost:${previewPort} */
-  previewUrl?: string;
-  /** E2B 沙箱 ID，用于重连或校验沙箱状态 */
-  sandboxId?: string;
-  /** 预览状态：pending 启动中，running 已就绪，failed 启动失败 */
-  previewStatus?: PreviewStatus;
+  createdAt: number;
+  lastSeenAt: number;
+  projectLimit: number;
+  yn: number;
+  deletedAt?: number | null;
 }
 
-export interface Message {
+/** 项目：一次对话对应一个项目 */
+export interface Project {
   id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  contentFormat?: 'text' | 'markdown';
-  createdAt: string;
-  updatedAt: string;
-  model?: string;
-  metadata?: Record<string, unknown>;
+  userId: string;
+  name: string;
+  description?: string | null;
+  templateId?: string | null;
+  framework: string;
+  styling: string;
+  currentVersionId?: string | null;
+  createdAt: number;
+  updatedAt: number;
+  hasPreview: boolean;
+  previewPort?: number | null;
+  previewUrl?: string | null;
+  sandboxId?: string | null;
+  previewStatus: PreviewStatus;
+}
+
+/** 对话消息：支持多种 messageType，assistant 可能关联 versionId */
+export interface ChatMessage {
+  id: string;
+  projectId: string;
+  conversationId: string;
+  parentId?: string | null;
+  role: 'user' | 'assistant' | 'system';
+  messageType: string;
+  contentText?: string | null;
+  contentJson?: string | null;
+  metadata?: string | null;
+  versionId?: string | null;
+  status: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface PaginationMeta {
@@ -39,53 +59,57 @@ export interface PaginationMeta {
   totalPages: number;
 }
 
-export interface IChatStorage {
-  createConversation(data: {
-    title?: string;
+export interface IProjectStorage {
+  /** 获取或创建用户（匿名默认用户） */
+  getOrCreateUser(userId?: string): Promise<User>;
+
+  createProject(data: {
+    userId: string;
+    name?: string;
+    description?: string | null;
+    templateId?: string | null;
+    framework?: string;
+    styling?: string;
     hasPreview?: boolean;
-  }): Promise<Conversation>;
+  }): Promise<Project>;
 
-  getConversations(params: {
-    page: number;
-    pageSize: number;
-  }): Promise<{ data: Conversation[]; meta: PaginationMeta }>;
+  getProjects(
+    userId: string,
+    params: { page: number; pageSize: number }
+  ): Promise<{ data: Project[]; meta: PaginationMeta }>;
 
-  getConversation(id: string): Promise<Conversation | null>;
+  getProject(id: string): Promise<Project | null>;
 
-  updateConversation(
+  updateProject(
     id: string,
     data: {
-      title?: string;
+      name?: string;
+      description?: string | null;
       hasPreview?: boolean;
-      previewPort?: number;
-      previewUrl?: string;
-      sandboxId?: string;
+      previewPort?: number | null;
+      previewUrl?: string | null;
+      sandboxId?: string | null;
       previewStatus?: PreviewStatus;
+      currentVersionId?: string | null;
     }
-  ): Promise<Conversation | null>;
+  ): Promise<Project | null>;
 
-  deleteConversation(id: string): Promise<boolean>;
+  deleteProject(id: string): Promise<boolean>;
 
   getMessages(
-    conversationId: string,
+    projectId: string,
     params: { page: number; pageSize: number }
-  ): Promise<{ data: Message[]; meta: PaginationMeta }>;
+  ): Promise<{ data: ChatMessage[]; meta: PaginationMeta }>;
 
-  getMessage(
-    conversationId: string,
-    messageId: string
-  ): Promise<Message | null>;
+  getMessage(projectId: string, messageId: string): Promise<ChatMessage | null>;
 
-  addMessage(conversationId: string, message: Message): Promise<void>;
+  addMessage(projectId: string, message: ChatMessage): Promise<void>;
 
   updateMessage(
-    conversationId: string,
+    projectId: string,
     messageId: string,
     content: string
-  ): Promise<Message | null>;
+  ): Promise<ChatMessage | null>;
 
-  deleteMessage(
-    conversationId: string,
-    messageId: string
-  ): Promise<boolean>;
+  deleteMessage(projectId: string, messageId: string): Promise<boolean>;
 }
