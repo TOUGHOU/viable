@@ -73,12 +73,25 @@ export class ChatService {
     userId?: string;
     page?: number;
     pageSize?: number;
-  }): Promise<{ data: Project[]; meta: unknown }> {
+  }): Promise<{
+    data: Project[];
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  }> {
     const user = await this.storage.getOrCreateUser(params.userId);
-    return this.storage.getProjects(user.id, {
+    const { data, meta } = await this.storage.getProjects(user.id, {
       page: params.page ?? 1,
       pageSize: params.pageSize ?? 20,
     });
+    return {
+      data,
+      total: meta.total,
+      page: meta.page,
+      pageSize: meta.pageSize,
+      totalPages: meta.totalPages,
+    };
   }
 
   async getProject(id: string): Promise<Project> {
@@ -113,12 +126,25 @@ export class ChatService {
   async getMessages(
     projectId: string,
     params: { page?: number; pageSize?: number }
-  ): Promise<{ data: ChatMessage[]; meta: unknown }> {
+  ): Promise<{
+    data: ChatMessage[];
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  }> {
     await this.getProject(projectId);
-    return this.storage.getMessages(projectId, {
+    const { data, meta } = await this.storage.getMessages(projectId, {
       page: params.page ?? 1,
       pageSize: params.pageSize ?? 50,
     });
+    return {
+      data,
+      total: meta.total,
+      page: meta.page,
+      pageSize: meta.pageSize,
+      totalPages: meta.totalPages,
+    };
   }
 
   async getMessage(projectId: string, messageId: string): Promise<ChatMessage> {
