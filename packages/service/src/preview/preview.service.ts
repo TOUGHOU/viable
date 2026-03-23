@@ -8,7 +8,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import * as path from 'node:path';
 import type { IProjectStorage } from '../chat/storage/chat-storage.interface';
 import { readDirectoryFilesRecursive } from '../utils/file';
-import { SandboxService, SANDBOX_APP_PATH, type FileEntry } from './sandbox.service';
+import { SandboxService, SANDBOX_APP_PATH, type FileEntry } from '../llm/sandbox/sandbox.service';
 
 /** 从 dist/preview 到 monorepo 根目录的上级层数 */
 const REPO_ROOT_UP_LEVELS = 5;
@@ -58,9 +58,7 @@ export class PreviewService {
    */
   async stopPreview(projectId: string): Promise<void> {
     await this.sandboxService.closeSandbox(projectId);
-    await this.storage
-      .updateProject(projectId, { sandboxId: undefined })
-      .catch(() => {});
+    await this.storage.updateProject(projectId, { sandboxId: undefined }).catch(() => {});
   }
 
   private async runSetup(projectId: string): Promise<void> {

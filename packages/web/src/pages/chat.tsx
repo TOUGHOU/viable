@@ -14,13 +14,8 @@ import { ThemeToggle } from '@/components/themeToggle';
 
 export function ChatPage() {
   const navigate = useNavigate();
-  const {
-    currentProjectId,
-    setCurrentProjectId,
-    addProject,
-    addMessage,
-    startNewChat,
-  } = useChatStore();
+  const { currentProjectId, setCurrentProjectId, addProject, addMessage, startNewChat } =
+    useChatStore();
 
   const [input, setInput] = useState('');
 

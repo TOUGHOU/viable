@@ -1,5 +1,5 @@
 /**
- * @file chat.prisma.storage.ts
+ * @file: chat.prisma.storage.ts
  * @author houfujian houfujian@jd.com
  * @description 基于 SQLite(Prisma) 的项目与消息持久化，实现 IProjectStorage
  */
@@ -25,7 +25,14 @@ function nowMs(): number {
   return Date.now();
 }
 
-function toUser(row: { id: string; createdAt: number; lastSeenAt: number; projectLimit: number; yn: number; deletedAt: number | null }): User {
+function toUser(row: {
+  id: string;
+  createdAt: number;
+  lastSeenAt: number;
+  projectLimit: number;
+  yn: number;
+  deletedAt: number | null;
+}): User {
   return {
     id: row.id,
     createdAt: row.createdAt,

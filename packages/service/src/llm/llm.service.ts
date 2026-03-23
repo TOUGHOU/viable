@@ -5,28 +5,20 @@
  */
 
 import { Injectable, Logger, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
-import * as fs from 'fs/promises';
-import * as path from 'path';
 import OpenAI from 'openai';
 /** 对话历史项，仅需 role 与 content 供 LLM 使用 */
 interface ChatHistoryMessage {
   role: 'user' | 'assistant';
   content: string;
 }
-import { ToolsService } from './tools.service';
+import { ToolsService } from './tool/tools.service';
+import { getAgentPrompt } from './prompt/agent-prompt';
+import { TOOL_SCHEMA } from './tool/tool-schema';
+import { SelectedElement } from 'src/type';
+import { buildUserPrompt } from './util/build-user-prompt';
 
 const AGENT_MAX_TURNS = 15;
-const CODING_AGENT_PROMPT_FILENAME = 'coding-agent.prompt.md';
-
-/** 按优先级尝试的 prompt 路径：运行时 __dirname、dist/llm、源码 src/llm（Nest 构建后 .md 在 dist/llm 或需从 src 读） */
-function getCodingAgentPromptPaths(): string[] {
-  const cwd = process.cwd();
-  return [
-    path.join(__dirname, CODING_AGENT_PROMPT_FILENAME),
-    path.join(cwd, 'dist', 'llm', CODING_AGENT_PROMPT_FILENAME),
-    path.join(cwd, 'src', 'llm', CODING_AGENT_PROMPT_FILENAME),
-  ];
-}
+const RECENT_MESSAGES_WINDOW = 20;
 
 /** 流式 chunk 中用于累积的 tool call */
 interface AccumulatedToolCall {
@@ -61,128 +53,16 @@ function toResultSummary(raw: string): string {
   return s.slice(0, MAX_RESULT_SUMMARY_LEN) + '…';
 }
 
-const CHAT_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
-  {
-    type: 'function',
-    function: {
-      name: 'get_current_time',
-      description:
-        'Get the current date and time. Use when you need to know the current time or date for context.',
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'read_file',
-      description:
-        'Read the full contents of a file from the workspace. Use to inspect source code, config files, or any text file.',
-      parameters: {
-        type: 'object',
-        properties: {
-          path: {
-            type: 'string',
-            description: 'Absolute or relative path to the file',
-          },
-        },
-        required: ['path'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'write_file',
-      description:
-        'Create a new file or overwrite an existing file with the given content. Use to create or modify source code and config files.',
-      parameters: {
-        type: 'object',
-        properties: {
-          path: {
-            type: 'string',
-            description: 'Absolute or relative path where to write the file',
-          },
-          content: {
-            type: 'string',
-            description: 'Full content to write to the file',
-          },
-        },
-        required: ['path', 'content'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'list_directory',
-      description:
-        'List files and directories at the given path. Use to explore project structure or find files.',
-      parameters: {
-        type: 'object',
-        properties: {
-          path: {
-            type: 'string',
-            description: 'Directory path to list. Defaults to workspace root if omitted.',
-            default: '.',
-          },
-        },
-        required: [],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'search_code',
-      description:
-        'Search for text or pattern in the codebase. Use to find definitions, usages, or specific code snippets.',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description: 'Search query (keyword or regex pattern)',
-          },
-          path: {
-            type: 'string',
-            description: 'Optional directory or file path to limit search scope',
-          },
-          file_pattern: {
-            type: 'string',
-            description: 'Optional glob to filter files, e.g. "*.ts" or "**/*.tsx"',
-          },
-        },
-        required: ['query'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'run_command',
-      description:
-        'Run a shell command in the workspace (e.g. install deps, run tests, build). Use for npm/pnpm/yarn, git, or other CLI tools.',
-      parameters: {
-        type: 'object',
-        properties: {
-          command: {
-            type: 'string',
-            description: 'The shell command to execute',
-          },
-          cwd: {
-            type: 'string',
-            description: 'Working directory for the command. Defaults to workspace root.',
-          },
-        },
-        required: ['command'],
-      },
-    },
-  },
-];
-
 @Injectable()
 export class LlmService implements OnModuleInit {
   private readonly logger = new Logger(LlmService.name);
   private codingAgentPrompt: string | null = null;
+  private messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    {
+      role: 'system',
+      content: getAgentPrompt(),
+    },
+  ];
 
   constructor(private readonly toolsService: ToolsService) {}
 
@@ -196,20 +76,9 @@ export class LlmService implements OnModuleInit {
   /** 加载 coding agent 系统提示词（仅在工作区模式下使用），失败时返回 null 并打日志 */
   private async loadCodingAgentPrompt(): Promise<string | null> {
     if (this.codingAgentPrompt !== null) return this.codingAgentPrompt;
-    const paths = getCodingAgentPromptPaths();
-    for (const filePath of paths) {
-      try {
-        const content = await fs.readFile(filePath, 'utf-8');
-        this.codingAgentPrompt = content;
-        return content;
-      } catch {
-        continue;
-      }
-    }
-    this.logger.warn(
-      `Coding agent prompt not found (tried: ${paths.join(', ')})`
-    );
-    return null;
+
+    this.codingAgentPrompt = getAgentPrompt();
+    return this.codingAgentPrompt;
   }
 
   private getClient(): OpenAI {
@@ -242,62 +111,25 @@ export class LlmService implements OnModuleInit {
    */
   async *streamChat(params: {
     content: string;
-    history: ChatHistoryMessage[];
+    selectedElements?: Array<SelectedElement>;
     workspaceRoot?: string;
-    selectedElements?: Array<{
-      id: string;
-      name: string;
-      type: string;
-      filePath: string;
-      fileName: string;
-      lineNumber: number;
-      col: number;
-      floorId?: string;
-      rect: { left: number; top: number; width: number; height: number; right: number; bottom: number };
-    }>;
   }): AsyncGenerator<StreamChatEvent> {
-    const { content, history, workspaceRoot, selectedElements } = params;
+    const { content, selectedElements, workspaceRoot } = params;
     const client = this.getClient();
     const model = this.getModel();
 
-    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = history.map((m) => ({
-      role: m.role as 'user' | 'assistant' | 'system',
-      content: m.content,
-    })) as OpenAI.Chat.ChatCompletionMessageParam[];
-
-    if (workspaceRoot) {
-      const systemPrompt = await this.loadCodingAgentPrompt();
-      if (systemPrompt) {
-        let fullSystem = systemPrompt;
-        if (selectedElements?.length) {
-          const selectedContext = [
-            '',
-            '---',
-            '## 用户当前选中的元素（预览）',
-            '用户在预览中选中了以下元素，请优先以这些位置为上下文进行查找或修改：',
-            ...selectedElements.map(
-              (el) =>
-                `- **${el.name}**：\`${el.filePath}\` 第 ${el.lineNumber} 行、第 ${el.col} 列（id: \`${el.id}\`）`
-            ),
-            '',
-          ].join('\n');
-          fullSystem += selectedContext;
-        }
-        messages.unshift({ role: 'system', content: fullSystem });
-      }
-    }
-
-    messages.push({ role: 'user', content });
+    this.messages.push({ role: 'user', content: buildUserPrompt(content, selectedElements) });
 
     let turns = 0;
     try {
       while (turns < AGENT_MAX_TURNS) {
         turns += 1;
+
         const stream = await client.chat.completions.create({
           model,
-          messages,
+          messages: this.messages,
           stream: true,
-          tools: CHAT_TOOLS,
+          tools: TOOL_SCHEMA,
           tool_choice: 'auto',
         });
 
@@ -352,7 +184,7 @@ export class LlmService implements OnModuleInit {
                 function: { name: tc.function.name, arguments: tc.function.arguments },
               }));
 
-            messages.push({
+            this.messages.push({
               role: 'assistant',
               content: accumulatedContent.trim() || null,
               tool_calls: toolCallsForApi,
@@ -385,10 +217,9 @@ export class LlmService implements OnModuleInit {
                 );
               } catch (toolErr) {
                 ok = false;
-                toolResult =
-                  toolErr instanceof Error ? toolErr.message : '工具执行失败';
+                toolResult = toolErr instanceof Error ? toolErr.message : '工具执行失败';
               }
-              messages.push({
+              this.messages.push({
                 role: 'tool',
                 tool_call_id: tc.id,
                 content: toolResult,

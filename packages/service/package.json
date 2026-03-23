@@ -7,7 +7,6 @@
     "build": "pnpm exec nest build",
     "start": "pnpm exec nest start",
     "dev": "pnpm exec nest start --watch",
-    "start:dev": "pnpm exec nest start --watch",
     "start:debug": "pnpm exec nest start --debug --watch",
     "lint": "pnpm exec eslint \"{src,apps,libs,test}/**/*.ts\" --max-warnings 0",
     "prisma:migrate": "pnpm exec prisma migrate dev",
@@ -29,7 +28,8 @@
     "fs-extra": "^11.3.4",
     "openai": "^6.25.0",
     "reflect-metadata": "^0.2.0",
-    "rxjs": "^7.8.0"
+    "rxjs": "^7.8.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

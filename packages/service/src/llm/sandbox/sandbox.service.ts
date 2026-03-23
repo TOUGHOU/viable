@@ -3,7 +3,7 @@
  * @author: houfujian houfujian@jd.com
  * @description E2B 沙箱能力：按会话创建/关闭沙箱，写入文件、安装依赖、后台启动 dev server、获取预览链接
  */
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { Sandbox } from '@e2b/code-interpreter';
 import * as path from 'path';
 
@@ -11,16 +11,56 @@ export const SANDBOX_APP_PATH = '/home/user/app';
 const DEFAULT_DEV_PORT = 5173;
 const DEV_SERVER_READY_TIMEOUT_MS = 120_000;
 
+/** 创建沙箱时写入的 metadata 键，用于 list 后恢复 conversationId 映射 */
+const METADATA_CONVERSATION_ID = 'conversationId';
+
 export interface FileEntry {
   relativePath: string;
   data: string;
 }
 
 @Injectable()
-export class SandboxService {
+export class SandboxService implements OnModuleInit {
   private readonly sandboxMap = new Map<string, Sandbox>();
-  /** 后台 dev server 进程句柄，用于 stopPreview 时 kill */
   private readonly devProcessMap = new Map<string, { kill: () => Promise<unknown> }>();
+
+  /**
+   * 模块初始化时拉取所有 running/paused 沙箱并放入 sandboxMap（通过 metadata.conversationId 关联）
+   */
+  async onModuleInit(): Promise<void> {
+    try {
+      const paginator = Sandbox.list({
+        query: { state: ['running', 'paused'] },
+      });
+      const allItems: { sandboxId: string; metadata?: Record<string, string> }[] = [];
+      while (paginator.hasNext) {
+        const page = await paginator.nextItems();
+        allItems.push(...(page as { sandboxId: string; metadata?: Record<string, string> }[]));
+      }
+
+      for (const item of allItems) {
+        const conversationId = item.metadata?.[METADATA_CONVERSATION_ID];
+        if (!conversationId) continue;
+        try {
+          const sandbox = await Sandbox.connect(item.sandboxId);
+          this.sandboxMap.set(conversationId, sandbox);
+          console.log(
+            `[Sandbox] onModuleInit: restored conversationId=${conversationId} sandboxId=${item.sandboxId}`
+          );
+        } catch (e) {
+          console.warn(
+            `[Sandbox] onModuleInit: failed to connect sandboxId=${item.sandboxId}:`,
+            (e as Error).message
+          );
+        }
+      }
+      console.log(
+        `[Sandbox] onModuleInit: restored ${this.sandboxMap.size} sandbox(es) into sandboxMap`
+      );
+    } catch (e) {
+      console.error('[Sandbox] onModuleInit: Sandbox.list failed', (e as Error).message);
+    }
+  }
 
   /**
    * 为会话创建并记录沙箱
@@ -37,6 +77,7 @@ export class SandboxService {
         onTimeout: 'pause',
         autoResume: true,
       },
+      metadata: { [METADATA_CONVERSATION_ID]: conversationId },
     });
     this.sandboxMap.set(conversationId, sandbox);
     const id = this.getSandboxIdFromInstance(sandbox);
@@ -91,12 +132,39 @@ export class SandboxService {
   async ensureSandbox(
     conversationId: string,
     existingSandboxId?: string
-  ): Promise<{ sandbox: Sandbox; sandboxId: string; recreated: boolean }> {
+  ): Promise<{
+    sandbox: Sandbox;
+    sandboxId: string;
+    recreated: boolean;
+    /** 仅在 recreated=false 时存在：沙箱内该端口是否有进程在监听（如 Vite 5173） */
+    devServerListening?: boolean;
+    previewUrl?: string;
+  }> {
     const status = await this.checkSandboxStatus(conversationId, existingSandboxId);
     if (status.alive && status.sandboxId) {
       const sandbox = this.sandboxMap.get(conversationId);
       if (sandbox) {
-        return { sandbox, sandboxId: status.sandboxId, recreated: false };
+        const devServerListening = await this.isPortListeningInSandbox(
+          conversationId,
+          DEFAULT_DEV_PORT
+        );
+        if (devServerListening) {
+          console.log(
+            `[Sandbox] ${conversationId} ensureSandbox: reuse sandbox, dev server listening on ${DEFAULT_DEV_PORT}`
+          );
+          console.log(`https://${sandbox.getHost(DEFAULT_DEV_PORT)}`);
+        } else {
+          console.log(
+            `[Sandbox] ${conversationId} ensureSandbox: reuse sandbox, port ${DEFAULT_DEV_PORT} not accepting connections (dev server down or not ready)`
+          );
+        }
+        return {
+          sandbox,
+          sandboxId: status.sandboxId,
+          previewUrl: `https://${sandbox.getHost(DEFAULT_DEV_PORT)}`,
+          recreated: false,
+          devServerListening,
+        };
       }
     }
     if (this.sandboxMap.has(conversationId)) {
@@ -106,6 +174,18 @@ export class SandboxService {
     const sandboxId = this.getSandboxIdFromInstance(sandbox);
     console.log(`[Sandbox] ${conversationId} ensureSandbox: (re)created sandboxId=${sandboxId}`);
     return { sandbox, sandboxId, recreated: true };
+  }
+
+  /**
+   * 在沙箱内探测本机端口是否有服务接受 TCP 连接（不依赖 curl，用 Node 一行命令）
+   */
+  private async isPortListeningInSandbox(conversationId: string, port: number): Promise<boolean> {
+    const sandbox = this.sandboxMap.get(conversationId);
+    if (!sandbox) return false;
+
+    const host = sandbox?.getHost(port);
+
+    return !!host;
   }
 
   private getSandboxIdFromInstance(sandbox: Sandbox): string {
@@ -313,6 +393,7 @@ export class SandboxService {
    */
   async readFile(conversationId: string, filePath: string): Promise<string> {
     const sandbox = this.sandboxMap.get(conversationId);
+
     if (!sandbox) throw new Error(`Sandbox not found: ${conversationId}`);
     return sandbox.files.read(filePath);
   }

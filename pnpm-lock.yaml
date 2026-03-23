@@ -128,13 +128,16 @@ importers:
         version: 11.3.4
       openai:
         specifier: ^6.25.0
-        version: 6.27.0
+        version: 6.27.0(zod@3.25.76)
       reflect-metadata:
         specifier: ^0.2.0
         version: 0.2.2
       rxjs:
         specifier: ^7.8.0
         version: 7.8.2
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@eslint/js':
         specifier: ^9.0.0
@@ -5700,7 +5703,7 @@ packages:
       - encoding
     dev: false
 
-  /openai@6.27.0:
+  /openai@6.27.0(zod@3.25.76):
     resolution: {integrity: sha1-6rrqnOaQSosuayrAqdabUn2V7PY=, tarball: http://registry.m.jd.com/openai/download/openai-6.27.0.tgz}
     hasBin: true
     peerDependencies:
@@ -5711,6 +5714,8 @@ packages:
         optional: true
       zod:
         optional: true
+    dependencies:
+      zod: 3.25.76
     dev: false
 
   /openapi-fetch@0.14.1:
@@ -7627,6 +7632,10 @@ packages:
     resolution: {integrity: sha1-jvaiKIqM3nU6AjJzBayRKRRBarQ=, tarball: http://registry.m.jd.com/zeptomatch/download/zeptomatch-2.0.2.tgz}
     dependencies:
       grammex: 3.1.12
+
+  /zod@3.25.76:
+    resolution: {integrity: sha1-JoQcP2/SKmonYOfMtxkXl2hHHjQ=, tarball: http://registry.m.jd.com/zod/download/zod-3.25.76.tgz}
+    dev: false
 
   /zustand@4.5.7(@types/react@18.3.28)(react@18.3.1):
     resolution: {integrity: sha1-fWuyAmoUJBXdi+iJHXhw5tvmX1U=, tarball: http://registry.m.jd.com/zustand/download/zustand-4.5.7.tgz}

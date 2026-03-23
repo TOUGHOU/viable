@@ -5,8 +5,8 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import { ProjectLimitExceededException } from './projectLimit.exception';
-import { MessageNotFoundException, ProjectNotFoundException } from './chat.exception';
+import { ProjectLimitExceededException } from './exception';
+import { MessageNotFoundException, ProjectNotFoundException } from './exception';
 import type { Response } from 'express';
 import type {
   IProjectStorage,
@@ -14,7 +14,11 @@ import type {
   ChatMessage,
   PreviewStatus,
 } from './storage/chat-storage.interface';
+import type { SendMessageParams } from './sendMessage.type';
+import type { AssistantMessageContentJson, ToolCallRecord } from './messageContent.type';
+import type { StreamChatEvent } from '../llm/llm.service';
 import { LlmService } from '../llm/llm.service';
+import { SandboxService } from '../llm/sandbox/sandbox.service';
 import { PreviewService } from '../preview/preview.service';
 
 function createId(): string {
@@ -30,7 +34,8 @@ export class ChatService {
   constructor(
     @Inject('IProjectStorage') private readonly storage: IProjectStorage,
     private readonly llmService: LlmService,
-    private readonly previewService: PreviewService
+    private readonly previewService: PreviewService,
+    private readonly sandboxService: SandboxService
   ) {}
 
   async createProject(data: {
@@ -69,11 +74,7 @@ export class ChatService {
     return project;
   }
 
-  async getProjects(params: {
-    userId?: string;
-    page?: number;
-    pageSize?: number;
-  }): Promise<{
+  async getProjects(params: { userId?: string; page?: number; pageSize?: number }): Promise<{
     data: Project[];
     total: number;
     page: number;
@@ -95,8 +96,19 @@ export class ChatService {
   }
 
   async getProject(id: string): Promise<Project> {
-    const project = await this.storage.getProject(id);
+    let project = await this.storage.getProject(id);
     if (!project) throw new ProjectNotFoundException(id);
+
+    if (project.sandboxId) {
+      const { sandboxId, previewUrl } = await this.sandboxService.ensureSandbox(
+        id,
+        project.sandboxId
+      );
+      const updated = await this.storage.updateProject(id, { sandboxId, previewUrl });
+
+      project = updated ?? { ...project, sandboxId, previewUrl };
+    }
+
     return project;
   }
 
@@ -154,11 +166,7 @@ export class ChatService {
     return msg;
   }
 
-  async updateMessage(
-    projectId: string,
-    messageId: string,
-    content: string
-  ): Promise<ChatMessage> {
+  async updateMessage(projectId: string, messageId: string, content: string): Promise<ChatMessage> {
     const msg = await this.storage.updateMessage(projectId, messageId, content);
     if (!msg) throw new MessageNotFoundException(projectId, messageId);
     return msg;
@@ -170,28 +178,55 @@ export class ChatService {
     return { success: true };
   }
 
-  async sendMessage(params: {
-    projectId: string;
-    content: string;
-    selectedElements?: Array<{
-      id: string;
-      name: string;
-      type: string;
-      filePath: string;
-      fileName: string;
-      lineNumber: number;
-      col: number;
-      floorId?: string;
-      rect: {
-        left: number;
-        top: number;
-        width: number;
-        height: number;
-        right: number;
-        bottom: number;
-      };
-    }>;
-  }): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage }> {
+  /**
+   * 有预览时返回预览目录作为工作区根路径，供 LLM 读写文件；无预览返回 undefined
+   */
+  private getE2BWorkspaceRoot(project: Project): string | undefined {
+    if (!project.sandboxId) return undefined;
+    return `e2b://${project.sandboxId}`;
+  }
+
+  /**
+   * 消费 streamChat 流，收集文本内容与工具调用记录
+   * @returns { content, toolCalls }
+   */
+  private async runStreamAndCollect(
+    stream: AsyncGenerator<StreamChatEvent>
+  ): Promise<{ content: string; toolCalls: ToolCallRecord[] }> {
+    let content = '';
+    const toolCalls: ToolCallRecord[] = [];
+    const byId = new Map<string, number>();
+
+    for await (const event of stream) {
+      if (event.type === 'content') {
+        content += event.chunk;
+        continue;
+      }
+      if (event.type === 'tool_call_start') {
+        const idx = toolCalls.length;
+        byId.set(event.id, idx);
+        toolCalls.push({
+          id: event.id,
+          name: event.name,
+          arguments: event.arguments,
+          success: false,
+        });
+        continue;
+      }
+      if (event.type === 'tool_call_end') {
+        const idx = byId.get(event.id);
+        if (idx !== undefined) {
+          toolCalls[idx].success = event.success;
+          toolCalls[idx].resultSummary = event.resultSummary;
+        }
+      }
+    }
+    return { content, toolCalls };
+  }
+
+  async sendMessage(
+    params: SendMessageParams
+  ): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage }> {
     const { projectId, content, selectedElements } = params;
     const project = await this.getProject(projectId);
     const { data: history } = await this.storage.getMessages(projectId, {
@@ -213,22 +248,13 @@ export class ChatService {
     };
     await this.storage.addMessage(projectId, userMessage);
 
-    const workspaceRoot = project.previewUrl
-      ? this.previewService.getPreviewDir(projectId)
-      : undefined;
-    const historyForLlm = history.map((m) => ({
-      role: m.role as 'user' | 'assistant',
-      content: m.contentText ?? '',
-    }));
-    let assistantContent = '';
-    for await (const event of this.llmService.streamChat({
-      content,
-      history: historyForLlm,
-      workspaceRoot,
-      selectedElements,
-    })) {
-      if (event.type === 'content') assistantContent += event.chunk;
-    }
+    const { content: assistantContent, toolCalls } = await this.runStreamAndCollect(
+      this.llmService.streamChat({
+        content,
+        selectedElements,
+        workspaceRoot: this.getE2BWorkspaceRoot(project),
+      })
+    );
 
     const assistantMessage: ChatMessage = {
       id: createId(),
@@ -237,6 +263,10 @@ export class ChatService {
       role: 'assistant',
       messageType: 'markdown',
       contentText: assistantContent,
+      contentJson:
+        toolCalls.length > 0
+          ? JSON.stringify({ toolCalls } satisfies AssistantMessageContentJson)
+          : null,
       versionId: null,
       status: 'sent',
       createdAt: nowMs(),
@@ -247,31 +277,7 @@ export class ChatService {
     return { userMessage, assistantMessage };
   }
 
-  async sendMessageStream(
-    res: Response,
-    params: {
-      projectId: string;
-      content: string;
-      selectedElements?: Array<{
-        id: string;
-        name: string;
-        type: string;
-        filePath: string;
-        fileName: string;
-        lineNumber: number;
-        col: number;
-        floorId?: string;
-        rect: {
-          left: number;
-          top: number;
-          width: number;
-          height: number;
-          right: number;
-          bottom: number;
-        };
-      }>;
-    }
-  ): Promise<void> {
+  async sendMessageStream(res: Response, params: SendMessageParams): Promise<void> {
     const { projectId, content, selectedElements } = params;
     const project = await this.getProject(projectId);
     const { data: history } = await this.storage.getMessages(projectId, {
@@ -319,19 +325,13 @@ export class ChatService {
     });
     sendEvent('user_message', toMessagePayload(userMessage));
 
-    const workspaceRoot = project.previewUrl
-      ? this.previewService.getPreviewDir(projectId)
-      : undefined;
-    const historyForLlm = history.map((m) => ({
-      role: m.role as 'user' | 'assistant',
-      content: m.contentText ?? '',
-    }));
     let fullContent = '';
+    const toolCalls: ToolCallRecord[] = [];
+    const toolCallsById = new Map<string, number>();
     try {
       for await (const event of this.llmService.streamChat({
         content,
-        history: historyForLlm,
-        workspaceRoot,
+        workspaceRoot: projectId,
         selectedElements,
       })) {
         switch (event.type) {
@@ -342,14 +342,28 @@ export class ChatService {
           case 'status':
             sendEvent('status', { phase: event.phase });
             break;
-          case 'tool_call_start':
+          case 'tool_call_start': {
+            const startIdx = toolCalls.length;
+            toolCallsById.set(event.id, startIdx);
+            toolCalls.push({
+              id: event.id,
+              name: event.name,
+              arguments: event.arguments,
+              success: false,
+            });
             sendEvent('tool_call_start', {
               id: event.id,
               name: event.name,
               arguments: event.arguments,
             });
             break;
-          case 'tool_call_end':
+          }
+          case 'tool_call_end': {
+            const endIdx = toolCallsById.get(event.id);
+            if (endIdx !== undefined) {
+              toolCalls[endIdx].success = event.success;
+              toolCalls[endIdx].resultSummary = event.resultSummary;
+            }
             sendEvent('tool_call_end', {
               id: event.id,
               name: event.name,
@@ -357,6 +371,7 @@ export class ChatService {
               resultSummary: event.resultSummary,
             });
             break;
+          }
         }
       }
     } catch (err) {
@@ -373,6 +388,10 @@ export class ChatService {
       role: 'assistant',
       messageType: 'markdown',
       contentText: fullContent,
+      contentJson:
+        toolCalls.length > 0
+          ? JSON.stringify({ toolCalls } satisfies AssistantMessageContentJson)
+          : null,
       versionId: null,
       status: 'sent',
       createdAt: nowMs(),
@@ -380,7 +399,11 @@ export class ChatService {
     };
     await this.storage.addMessage(projectId, assistantMessage);
 
-    sendEvent('assistant_message', toMessagePayload(assistantMessage));
+    const assistantPayload = toMessagePayload(assistantMessage);
+    sendEvent('assistant_message', {
+      ...assistantPayload,
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+    });
     res.end();
   }
 }

@@ -1,5 +1,5 @@
 /**
- * @file messageList.tsx
+ * @file: messageList.tsx
  * @description 消息列表，支持流式占位与长列表渲染优化
  */
 
@@ -19,7 +19,6 @@ export function MessageList({
   messages,
   streamingMessageId = null,
   streamPhase = null,
-  streamToolCalls = [],
   className,
 }: MessageListProps) {
   return (
@@ -37,7 +36,6 @@ export function MessageList({
             message={msg}
             isStreaming={streamingMessageId != null && msg.id === streamingMessageId}
             streamPhase={msg.id === streamingMessageId ? streamPhase : null}
-            streamToolCalls={msg.id === streamingMessageId ? streamToolCalls : []}
           />
         </div>
       ))}

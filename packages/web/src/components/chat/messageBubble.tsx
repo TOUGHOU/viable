@@ -1,5 +1,5 @@
 /**
- * @file messageBubble.tsx
+ * @file: messageBubble.tsx
  * @description 单条消息（用户/AI），支持 Markdown 渲染与流式「正在思考」状态
  */
 
@@ -28,16 +28,24 @@ export function MessageBubble({
     !isUser &&
     isStreaming &&
     (streamPhase === 'thinking' || (!message.content && streamPhase !== 'content'));
-  const showToolCalls = !isUser && isStreaming && streamToolCalls.length > 0;
+  const streamingToolCalls = !isUser && isStreaming && streamToolCalls.length > 0;
+
+  const messageToolCalls =
+    !isUser && !streamingToolCalls && message.toolCalls && message.toolCalls.length > 0
+      ? message.toolCalls.map((tc) => ({
+          id: tc.id,
+          name: tc.name,
+          status: 'done' as const,
+          arguments: tc.arguments,
+          success: tc.success,
+          resultSummary: tc.resultSummary,
+        }))
+      : [];
+  const toolCallsToShow = streamingToolCalls ? streamToolCalls : messageToolCalls;
+  const showToolCalls = toolCallsToShow.length > 0;
 
   return (
-    <div
-      className={cn(
-        'flex w-full',
-        isUser ? 'justify-end' : 'justify-start',
-        className
-      )}
-    >
+    <div className={cn('flex w-full', isUser ? 'justify-end' : 'justify-start', className)}>
       <div
         className={cn(
           'max-w-[80%] rounded-xl px-4 py-2.5 text-sm',
@@ -48,27 +56,39 @@ export function MessageBubble({
       >
         {showToolCalls && (
           <div className="space-y-1.5 py-0.5">
-            {streamToolCalls.map((tc) => (
+            {toolCallsToShow.map((tc) => (
               <div
                 key={tc.id}
                 className="flex items-start gap-2 rounded-lg bg-background/40 px-2.5 py-1.5 text-xs"
               >
                 {tc.status === 'running' ? (
-                  <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground" aria-hidden>
+                  <span
+                    className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground"
+                    aria-hidden
+                  >
                     <span className="h-1.5 w-1.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
                   </span>
                 ) : tc.success ? (
-                  <span className="shrink-0 text-green-600 dark:text-green-400" aria-label="完成">✓</span>
+                  <span className="shrink-0 text-green-600 dark:text-green-400" aria-label="完成">
+                    ✓
+                  </span>
                 ) : (
-                  <span className="shrink-0 text-destructive" aria-label="失败">✗</span>
+                  <span className="shrink-0 text-destructive" aria-label="失败">
+                    ✗
+                  </span>
                 )}
                 <div className="min-w-0 flex-1">
                   <span className="font-medium text-foreground">{tc.name}</span>
                   {tc.arguments && Object.keys(tc.arguments).length > 0 && (
                     <span className="ml-1 text-muted-foreground">
-                      ({Object.entries(tc.arguments)
-                        .map(([k, v]) => `${k}: ${typeof v === 'string' ? (v.length > 30 ? v.slice(0, 30) + '…' : v) : JSON.stringify(v)}`)
-                        .join(', ')})
+                      (
+                      {Object.entries(tc.arguments)
+                        .map(
+                          ([k, v]) =>
+                            `${k}: ${typeof v === 'string' ? (v.length > 30 ? v.slice(0, 30) + '…' : v) : JSON.stringify(v)}`
+                        )
+                        .join(', ')}
+                      )
                     </span>
                   )}
                   {tc.status === 'done' && tc.resultSummary != null && tc.resultSummary !== '' && (
@@ -81,10 +101,7 @@ export function MessageBubble({
         )}
         {showThinking ? (
           <div className="flex items-center gap-1 py-0.5 text-accent/90">
-            <span
-              className="inline-flex gap-0.5"
-              aria-label="正在思考"
-            >
+            <span className="inline-flex gap-0.5" aria-label="正在思考">
               <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70 animate-thinking" />
               <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70 animate-thinking [animation-delay:0.2s]" />
               <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70 animate-thinking [animation-delay:0.4s]" />

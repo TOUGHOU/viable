@@ -105,11 +105,7 @@ export interface IProjectStorage {
 
   addMessage(projectId: string, message: ChatMessage): Promise<void>;
 
-  updateMessage(
-    projectId: string,
-    messageId: string,
-    content: string
-  ): Promise<ChatMessage | null>;
+  updateMessage(projectId: string, messageId: string, content: string): Promise<ChatMessage | null>;
 
   deleteMessage(projectId: string, messageId: string): Promise<boolean>;
 }

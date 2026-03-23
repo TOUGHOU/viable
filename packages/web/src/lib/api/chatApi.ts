@@ -8,8 +8,7 @@ import type { Project, Message, SelectedElement, StreamPhase } from '@/types/cha
 
 const BASE_URL =
   (typeof import.meta !== 'undefined' &&
-    (import.meta as unknown as { env?: { VITE_API_BASE_URL?: string } }).env
-      ?.VITE_API_BASE_URL) ||
+    (import.meta as unknown as { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL) ||
   'http://localhost:3000';
 
 export interface ApiError {
@@ -18,10 +17,7 @@ export interface ApiError {
   error?: string;
 }
 
-async function request<T>(
-  path: string,
-  body: Record<string, unknown> = {}
-): Promise<T> {
+async function request<T>(path: string, body: Record<string, unknown> = {}): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -57,29 +53,57 @@ function toProject(p: Record<string, unknown>): Project {
   } as Project;
 }
 
+function parseToolCalls(raw: Record<string, unknown>[]): Message['toolCalls'] {
+  return raw.map((tc) => ({
+    id: (tc.id as string) ?? '',
+    name: (tc.name as string) ?? '',
+    arguments: tc.arguments as Record<string, unknown> | undefined,
+    success: (tc.success as boolean) ?? false,
+    resultSummary: tc.resultSummary as string | undefined,
+  }));
+}
+
 function toMessage(m: Record<string, unknown>): Message {
   const createdAt = m.createdAt as number | string;
   const updatedAt = m.updatedAt as number | string;
+  let rawToolCalls = m.toolCalls as Record<string, unknown>[] | undefined;
+  if (!Array.isArray(rawToolCalls) && typeof m.contentJson === 'string') {
+    try {
+      const parsed = JSON.parse(m.contentJson) as { toolCalls?: Record<string, unknown>[] };
+      rawToolCalls = parsed?.toolCalls;
+    } catch {
+      // contentJson 解析失败则忽略
+    }
+  }
+  const toolCalls = Array.isArray(rawToolCalls)
+    ? parseToolCalls(rawToolCalls)
+    : undefined;
   return {
     id: m.id as string,
     role: m.role as Message['role'],
     content: (m.content as string) ?? (m.contentText as string) ?? '',
-    contentFormat: ((m.contentFormat as string) ?? ((m.messageType as string) === 'markdown' ? 'markdown' : 'text')) as Message['contentFormat'],
-    createdAt: typeof createdAt === 'number' ? new Date(createdAt).toISOString() : String(createdAt),
-    updatedAt: typeof updatedAt === 'number' ? new Date(updatedAt).toISOString() : String(updatedAt),
+    contentFormat: ((m.contentFormat as string) ??
+      ((m.messageType as string) === 'markdown' ? 'markdown' : 'text')) as Message['contentFormat'],
+    createdAt:
+      typeof createdAt === 'number' ? new Date(createdAt).toISOString() : String(createdAt),
+    updatedAt:
+      typeof updatedAt === 'number' ? new Date(updatedAt).toISOString() : String(updatedAt),
     model: m.model as string | undefined,
     metadata: m.metadata as Record<string, unknown> | undefined,
     versionId: m.versionId as string | null | undefined,
+    toolCalls: toolCalls?.length ? toolCalls : undefined,
   };
 }
 
-export async function createProject(body: {
-  title?: string;
-  name?: string;
-  templateId?: string;
-  userId?: string;
-  hasPreview?: boolean;
-} = {}): Promise<Project> {
+export async function createProject(
+  body: {
+    title?: string;
+    name?: string;
+    templateId?: string;
+    userId?: string;
+    hasPreview?: boolean;
+  } = {}
+): Promise<Project> {
   const res = await request<Record<string, unknown>>('/chat/createProject', body);
   return toProject(res as Record<string, unknown>);
 }
@@ -89,11 +113,13 @@ export interface GetProjectsResult {
   meta: { total: number; page: number; pageSize: number; totalPages: number };
 }
 
-export async function getProjects(body: {
-  userId?: string;
-  page?: number;
-  pageSize?: number;
-} = {}): Promise<GetProjectsResult> {
+export async function getProjects(
+  body: {
+    userId?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}
+): Promise<GetProjectsResult> {
   const res = await request<{ data: Record<string, unknown>[]; meta: GetProjectsResult['meta'] }>(
     '/chat/getProjects',
     body
@@ -146,10 +172,7 @@ export async function deleteProject(body: { id: string }): Promise<{ success?: b
   return request('/chat/deleteProject', body);
 }
 
-export async function getMessage(body: {
-  projectId: string;
-  messageId: string;
-}): Promise<Message> {
+export async function getMessage(body: { projectId: string; messageId: string }): Promise<Message> {
   const res = await request<Record<string, unknown>>('/chat/getMessage', body);
   return toMessage(res as Record<string, unknown>);
 }
@@ -196,8 +219,17 @@ export async function sendMessageStream(
     onUserMessage?: (message: Message) => void;
     onContent?: (chunk: string) => void;
     onStatus?: (phase: StreamPhase) => void;
-    onToolCallStart?: (payload: { id: string; name: string; arguments: Record<string, unknown> }) => void;
-    onToolCallEnd?: (payload: { id: string; name: string; success: boolean; resultSummary?: string }) => void;
+    onToolCallStart?: (payload: {
+      id: string;
+      name: string;
+      arguments: Record<string, unknown>;
+    }) => void;
+    onToolCallEnd?: (payload: {
+      id: string;
+      name: string;
+      success: boolean;
+      resultSummary?: string;
+    }) => void;
     onAssistantMessage?: (message: Message) => void;
     onError?: (message: string) => void;
   }
@@ -245,10 +277,19 @@ export async function sendMessageStream(
         const obj = JSON.parse(data) as { phase: StreamPhase };
         callbacks.onStatus(obj.phase);
       } else if (currentEvent === 'tool_call_start' && callbacks.onToolCallStart) {
-        const obj = JSON.parse(data) as { id: string; name: string; arguments: Record<string, unknown> };
+        const obj = JSON.parse(data) as {
+          id: string;
+          name: string;
+          arguments: Record<string, unknown>;
+        };
         callbacks.onToolCallStart(obj);
       } else if (currentEvent === 'tool_call_end' && callbacks.onToolCallEnd) {
-        const obj = JSON.parse(data) as { id: string; name: string; success: boolean; resultSummary?: string };
+        const obj = JSON.parse(data) as {
+          id: string;
+          name: string;
+          success: boolean;
+          resultSummary?: string;
+        };
         callbacks.onToolCallEnd(obj);
       } else if (currentEvent === 'assistant_message' && callbacks.onAssistantMessage) {
         callbacks.onAssistantMessage(toMessage(JSON.parse(data) as Record<string, unknown>));

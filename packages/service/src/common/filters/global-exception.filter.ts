@@ -44,7 +44,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     if (status >= 500) {
       this.logger.error(logPayload);
-    } else {
+    } else if (status !== 404) {
       this.logger.warn(logPayload);
     }
 

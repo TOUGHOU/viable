@@ -1,11 +1,11 @@
 /**
- * @file chat.exception.ts
+ * @file: index.ts
  * @author houfujian houfujian@jd.com
  * @description Chat 模块业务异常定义（项目 / 消息维度）
  */
 
 import { HttpStatus } from '@nestjs/common';
-import { AppException } from '../common/exceptions/app.exception';
+import { AppException } from '../../common/exceptions/app.exception';
 
 export class ProjectNotFoundException extends AppException {
   constructor(projectId: string) {
@@ -22,3 +22,11 @@ export class MessageNotFoundException extends AppException {
   }
 }
 
+export class ProjectLimitExceededException extends AppException {
+  constructor(projectLimit: number, message?: string) {
+    const defaultMessage = `项目数量已达上限（${projectLimit}），无法创建新项目`;
+    super('PROJECT_LIMIT_EXCEEDED', message ?? defaultMessage, HttpStatus.TOO_MANY_REQUESTS, {
+      projectLimit,
+    });
+  }
+}

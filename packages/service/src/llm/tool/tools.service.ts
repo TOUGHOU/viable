@@ -1,5 +1,5 @@
 /**
- * @file tools.service.ts
+ * @file: tools.service.ts
  * @author houfujian houfujian@jd.com
  * @description Coding agent 工具：读/写文件、列目录、搜索代码、执行命令、获取当前时间；支持本地工作区与 E2B 沙箱工作区（e2b://conversationId）
  */
@@ -9,26 +9,36 @@ import * as fs from 'fs/promises';
 import * as pathModule from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { SANDBOX_APP_PATH } from '../preview/sandbox.service';
-import { SandboxService } from '../preview/sandbox.service';
+import { SANDBOX_APP_PATH } from '../sandbox/sandbox.service';
+import { SandboxService } from '../sandbox/sandbox.service';
 
 const execAsync = promisify(exec);
 
-const E2B_PREFIX = 'e2b://';
 const SKIP_DIRS = new Set(['node_modules', '.git', '.vite', 'dist', '.turbo', '.next']);
 const MAX_SEARCH_FILE_SIZE = 512 * 1024; // 512KB
 const RUN_COMMAND_TIMEOUT_MS = 60_000;
+const STDOUT_TAIL_LEN = 2000;
+const STDERR_TAIL_LEN = 4000;
 
-export type ToolResult = { success: true; data: unknown } | { success: false; error: string };
+export type ToolResult =
+  | { success: true; data: unknown }
+  | { success: false; error: string; data?: unknown };
+
+function tailForToolOutput(value: string, maxLen: number): string {
+  if (!value) return value;
+  const s = String(value);
+  if (s.length <= maxLen) return s;
+  return '…' + s.slice(s.length - maxLen);
+}
+
+function safeString(value: unknown): string {
+  if (value == null) return '';
+  return typeof value === 'string' ? value : JSON.stringify(value);
+}
 
 @Injectable()
 export class ToolsService {
   constructor(private readonly sandboxService: SandboxService) {}
-
-  private static parseE2BConversationId(workspaceRoot?: string): string | null {
-    if (!workspaceRoot || !workspaceRoot.startsWith(E2B_PREFIX)) return null;
-    return workspaceRoot.slice(E2B_PREFIX.length).trim() || null;
-  }
 
   private getWorkspaceRoot(override?: string): string {
     const base = override ?? process.env.WORKSPACE_ROOT ?? process.cwd();
@@ -58,31 +68,13 @@ export class ToolsService {
   }
 
   /**
-   * get_current_time：返回当前日期时间
-   */
-  getCurrentTime(): ToolResult {
-    const now = new Date();
-    return {
-      success: true,
-      data: {
-        iso: now.toISOString(),
-        locale: now.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
-      },
-    };
-  }
-
-  /**
    * read_file：读取文件内容
    */
-  async readFile(
-    filePath: string,
-    workspaceRoot?: string
-  ): Promise<ToolResult> {
-    const conversationId = ToolsService.parseE2BConversationId(workspaceRoot);
-    if (conversationId) {
+  async readFile(filePath: string, workspaceRoot?: string): Promise<ToolResult> {
+    if (workspaceRoot) {
       try {
         const resolved = this.resolveSandboxPath(filePath);
-        const content = await this.sandboxService.readFile(conversationId, resolved);
+        const content = await this.sandboxService.readFile(workspaceRoot, resolved);
         return { success: true, data: { path: resolved, content } };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -103,12 +95,8 @@ export class ToolsService {
   /**
    * write_file：写入或覆盖文件
    */
-  async writeFile(
-    filePath: string,
-    content: string,
-    workspaceRoot?: string
-  ): Promise<ToolResult> {
-    const conversationId = ToolsService.parseE2BConversationId(workspaceRoot);
+  async writeFile(filePath: string, content: string, workspaceRoot?: string): Promise<ToolResult> {
+    const conversationId = workspaceRoot;
     if (conversationId) {
       try {
         const resolved = this.resolveSandboxPath(filePath);
@@ -134,11 +122,7 @@ export class ToolsService {
   /**
    * list_directory：列出目录下的文件和子目录
    */
-  async listDirectory(
-    dirPath?: string,
-    workspaceRoot?: string
-  ): Promise<ToolResult> {
-    const conversationId = ToolsService.parseE2BConversationId(workspaceRoot);
+  async listDirectory(dirPath?: string, conversationId?: string): Promise<ToolResult> {
     if (conversationId) {
       try {
         const dir = dirPath ?? '.';
@@ -152,7 +136,7 @@ export class ToolsService {
     }
     try {
       const dir = dirPath ?? '.';
-      const root = this.getWorkspaceRoot(workspaceRoot);
+      const root = this.getWorkspaceRoot(conversationId);
       const resolved = this.resolveInWorkspace(root, dir);
       const stat = await fs.stat(resolved);
       if (!stat.isDirectory()) {
@@ -199,9 +183,8 @@ export class ToolsService {
     query: string,
     scopePath?: string,
     filePattern?: string,
-    workspaceRoot?: string
+    conversationId?: string
   ): Promise<ToolResult> {
-    const conversationId = ToolsService.parseE2BConversationId(workspaceRoot);
     if (conversationId) {
       try {
         const scope = scopePath ? this.resolveSandboxPath(scopePath) : SANDBOX_APP_PATH;
@@ -214,7 +197,7 @@ export class ToolsService {
         for (const raw of (stdout ?? '').trim().split('\n').filter(Boolean)) {
           const m = raw.match(/:(\d+):(.*)$/);
           if (!m) continue;
-          const pathStr = raw.slice(0, (m.index ?? 0));
+          const pathStr = raw.slice(0, m.index ?? 0);
           const lineNum = parseInt(m[1], 10) || 1;
           const content = m[2].trim();
           results.push({
@@ -233,10 +216,8 @@ export class ToolsService {
       }
     }
     try {
-      const root = this.getWorkspaceRoot(workspaceRoot);
-      const scope = scopePath
-        ? this.resolveInWorkspace(root, scopePath)
-        : root;
+      const root = this.getWorkspaceRoot(conversationId);
+      const scope = scopePath ? this.resolveInWorkspace(root, scopePath) : root;
       const results: Array<{ path: string; line: number; content: string }> = [];
       const queryLower = query.toLowerCase();
       const isRegex = /^\/.+\/$/.test(query);
@@ -300,12 +281,7 @@ export class ToolsService {
   /**
    * run_command：在指定目录执行 shell 命令
    */
-  async runCommand(
-    command: string,
-    cwd?: string,
-    workspaceRoot?: string
-  ): Promise<ToolResult> {
-    const conversationId = ToolsService.parseE2BConversationId(workspaceRoot);
+  async runCommand(command: string, cwd?: string, conversationId?: string): Promise<ToolResult> {
     if (conversationId) {
       try {
         const workDir = cwd ? this.resolveSandboxPath(cwd) : SANDBOX_APP_PATH;
@@ -314,14 +290,23 @@ export class ToolsService {
           command,
           workDir
         );
+        const stdoutTail = tailForToolOutput(stdout.trim(), STDOUT_TAIL_LEN);
+        const stderrTail = tailForToolOutput(stderr.trim(), STDERR_TAIL_LEN);
+        if (exitCode !== 0) {
+          return {
+            success: false,
+            error: `exitCode=${exitCode}`,
+            data: {
+              cwd: workDir,
+              stdoutTail,
+              stderrTail,
+              exitCode,
+            },
+          };
+        }
         return {
           success: true,
-          data: {
-            cwd: workDir,
-            stdout: stdout.trim(),
-            stderr: stderr.trim(),
-            exitCode,
-          },
+          data: { cwd: workDir, stdoutTail, stderrTail, exitCode },
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -329,7 +314,7 @@ export class ToolsService {
       }
     }
     try {
-      const root = this.getWorkspaceRoot(workspaceRoot);
+      const root = this.getWorkspaceRoot(conversationId);
       const workDir = cwd ? this.resolveInWorkspace(root, cwd) : root;
       const { stdout, stderr } = await execAsync(command, {
         cwd: workDir,
@@ -340,8 +325,8 @@ export class ToolsService {
         success: true,
         data: {
           cwd: workDir,
-          stdout: stdout.trim(),
-          stderr: stderr.trim(),
+          stdoutTail: tailForToolOutput(stdout.trim(), STDOUT_TAIL_LEN),
+          stderrTail: tailForToolOutput(stderr.trim(), STDERR_TAIL_LEN),
           exitCode: 0,
         },
       };
@@ -352,13 +337,13 @@ export class ToolsService {
       const code = ex.killed ? -1 : (ex.code ?? -1);
       const message = err instanceof Error ? err.message : String(err);
       return {
-        success: true,
+        success: false,
+        error: message || `exitCode=${code}`,
         data: {
-          cwd: this.getWorkspaceRoot(workspaceRoot),
-          stdout,
-          stderr,
+          cwd: this.getWorkspaceRoot(conversationId),
+          stdoutTail: tailForToolOutput(stdout, STDOUT_TAIL_LEN),
+          stderrTail: tailForToolOutput(stderr, STDERR_TAIL_LEN),
           exitCode: code,
-          error: message,
         },
       };
     }
@@ -374,8 +359,6 @@ export class ToolsService {
   ): Promise<string> {
     const result: ToolResult = await (async (): Promise<ToolResult> => {
       switch (name) {
-        case 'get_current_time':
-          return this.getCurrentTime();
         case 'read_file': {
           const pathArg = args.path;
           if (typeof pathArg !== 'string') {
@@ -393,10 +376,7 @@ export class ToolsService {
         }
         case 'list_directory': {
           const pathArg = args.path;
-          return this.listDirectory(
-            typeof pathArg === 'string' ? pathArg : '.',
-            workspaceRoot
-          );
+          return this.listDirectory(typeof pathArg === 'string' ? pathArg : '.', workspaceRoot);
         }
         case 'search_code': {
           const queryArg = args.query;
@@ -425,7 +405,28 @@ export class ToolsService {
           return { success: false, error: `Unknown tool: ${name}` };
       }
     })();
+    if (result.success) {
+      return JSON.stringify(result.data);
+    }
 
-    return JSON.stringify(result.success ? result.data : { error: result.error });
+    // 失败时抛错，让 LlmService 能把 tool_call_end.success 标记为 false。
+    // 为了前端展示（以及 resultSummary 截断）更稳定：JSON 的前置字段优先包含 exitCode + stderrTail。
+    const resultData = (result as { data?: unknown }).data as Record<string, unknown> | undefined;
+    const exitCode = typeof resultData?.exitCode === 'number' ? resultData.exitCode : undefined;
+    const stderrTail =
+      typeof resultData?.stderrTail === 'string' ? resultData.stderrTail : safeString(resultData?.stderrTail);
+    const stdoutTail =
+      typeof resultData?.stdoutTail === 'string' ? resultData.stdoutTail : safeString(resultData?.stdoutTail);
+    const cwd = typeof resultData?.cwd === 'string' ? resultData.cwd : undefined;
+
+    const payload: Record<string, unknown> = {
+      exitCode,
+      stderrTail: stderrTail || undefined,
+      cwd,
+      stdoutTail: stdoutTail || undefined,
+      error: result.error,
+    };
+
+    throw new Error(JSON.stringify(payload));
   }
 }

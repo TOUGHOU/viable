@@ -20,11 +20,7 @@ export interface ConversationPanelProps {
   useStream?: boolean;
 }
 
-export function ConversationPanel({
-  projectId,
-  title,
-  useStream = true,
-}: ConversationPanelProps) {
+export function ConversationPanel({ projectId, title, useStream = true }: ConversationPanelProps) {
   const { getMessages, addMessage, setMessages, selectedSkill, setSelectedSkill } = useChatStore();
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -252,7 +248,6 @@ export function ConversationPanel({
           messages={messages}
           streamingMessageId={streamingMessageId}
           streamPhase={streamPhase}
-          streamToolCalls={streamToolCalls}
           className="p-4"
         />
       </div>

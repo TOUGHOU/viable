@@ -69,6 +69,8 @@ export interface Message {
   metadata?: Record<string, unknown>;
   /** 仅 assistant 消息在产生代码变更时有值 */
   versionId?: string | null;
+  /** 助手消息中的工具调用列表（后端返回） */
+  toolCalls?: MessageToolCall[];
 }
 
 export type StreamPhase = 'thinking' | 'tool_calls' | 'content' | 'done';
@@ -79,6 +81,15 @@ export interface StreamToolCall {
   status: 'running' | 'done';
   arguments?: Record<string, unknown>;
   success?: boolean;
+  resultSummary?: string;
+}
+
+/** 后端返回的助手消息中附带的工具调用结果（非流式） */
+export interface MessageToolCall {
+  id: string;
+  name: string;
+  arguments?: Record<string, unknown>;
+  success: boolean;
   resultSummary?: string;
 }
 
