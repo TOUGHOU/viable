@@ -73,7 +73,42 @@ export interface Message {
   toolCalls?: MessageToolCall[];
 }
 
-export type StreamPhase = 'thinking' | 'tool_calls' | 'content' | 'done';
+/** 与后端 SSE `event: status` 的 `type` 对齐 */
+export type StreamStage = 'thinking' | 'tool_calls' | 'content';
+
+export type StreamFinishReason =
+  | 'stop'
+  | 'length'
+  | 'tool-calls'
+  | 'content-filter'
+  | 'error';
+
+export interface StreamUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
+/** 单条阶段边界事件：finish=false 开启该阶段 loading，finish=true 关闭 */
+export interface StreamStageStatusEvent {
+  type: StreamStage;
+  finish: boolean;
+  finishReason?: StreamFinishReason;
+  usage?: StreamUsage;
+  error?: string;
+}
+
+/** 各阶段是否处于 loading（由多条 status 事件累积） */
+export interface StreamStagesActive {
+  thinking: boolean;
+  tool_calls: boolean;
+  content: boolean;
+}
+
+export const INITIAL_STREAM_STAGES: StreamStagesActive = {
+  thinking: false,
+  tool_calls: false,
+  content: false,
+};
 
 export interface StreamToolCall {
   id: string;

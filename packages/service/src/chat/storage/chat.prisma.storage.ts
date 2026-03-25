@@ -10,6 +10,9 @@ import type {
   IProjectStorage,
   Project,
   ChatMessage,
+  ChatMessageToolCall,
+  ChatMessageStatus,
+  PartsMessageContent,
   PaginationMeta,
   PreviewStatus,
   User,
@@ -87,25 +90,85 @@ function toChatMessage(row: {
   role: string;
   messageType: string;
   contentText: string | null;
-  contentJson: string | null;
+  contentParts: string | null;
   metadata: string | null;
   versionId: string | null;
   status: string;
   createdAt: number;
   updatedAt: number;
+  toolCalls?: Array<{
+    id: string;
+    toolCallId: string;
+    toolName: string;
+    argumentsJson: string | null;
+    success: boolean;
+    resultSummary: string | null;
+  }>;
 }): ChatMessage {
+  if (row.messageType === 'parts') {
+    let parts: PartsMessageContent['parts'] = [];
+    if (row.contentParts != null) {
+      try {
+        const parsed = JSON.parse(row.contentParts) as { parts?: PartsMessageContent['parts'] };
+        if (Array.isArray(parsed.parts)) {
+          parts = parsed.parts;
+        }
+      } catch {
+        parts = [];
+      }
+    }
+    return {
+      id: row.id,
+      projectId: row.projectId,
+      conversationId: row.conversationId,
+      parentId: row.parentId ?? undefined,
+      role: row.role as 'user' | 'assistant' | 'system',
+      messageType: 'parts',
+      content: { kind: 'parts', parts },
+      metadata: row.metadata ?? undefined,
+      versionId: row.versionId ?? undefined,
+      status: row.status as ChatMessageStatus,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  const toolCalls =
+    row.toolCalls && row.toolCalls.length > 0
+      ? row.toolCalls.map((toolCall) => {
+          let argumentsValue: Record<string, unknown> | undefined;
+          if (toolCall.argumentsJson) {
+            try {
+              argumentsValue = JSON.parse(toolCall.argumentsJson) as Record<string, unknown>;
+            } catch {
+              argumentsValue = undefined;
+            }
+          }
+          return {
+            id: toolCall.toolCallId,
+            name: toolCall.toolName,
+            arguments: argumentsValue,
+            success: toolCall.success,
+            resultSummary: toolCall.resultSummary ?? undefined,
+          } satisfies ChatMessageToolCall;
+        })
+      : undefined;
   return {
     id: row.id,
     projectId: row.projectId,
     conversationId: row.conversationId,
     parentId: row.parentId ?? undefined,
     role: row.role as 'user' | 'assistant' | 'system',
-    messageType: row.messageType,
-    contentText: row.contentText ?? undefined,
-    contentJson: row.contentJson ?? undefined,
+    messageType: row.messageType === 'markdown' ? 'markdown' : 'text',
+    content: {
+      kind: 'text',
+      format: row.messageType === 'markdown' ? 'markdown' : 'text',
+      text: row.contentText ?? '',
+      toolCalls,
+    },
     metadata: row.metadata ?? undefined,
     versionId: row.versionId ?? undefined,
-    status: row.status,
+    status: row.status as ChatMessageStatus,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -254,6 +317,11 @@ export class ChatPrismaStorage implements IProjectStorage {
         orderBy: { createdAt: 'asc' },
         skip: (params.page - 1) * params.pageSize,
         take: params.pageSize,
+        include: {
+          toolCalls: {
+            orderBy: { createdAt: 'asc' },
+          },
+        },
       }),
       this.prisma.chatMessage.count({ where: { projectId, yn: 1 } }),
     ]);
@@ -272,6 +340,11 @@ export class ChatPrismaStorage implements IProjectStorage {
   async getMessage(projectId: string, messageId: string): Promise<ChatMessage | null> {
     const row = await this.prisma.chatMessage.findFirst({
       where: { id: messageId, projectId, yn: 1 },
+      include: {
+        toolCalls: {
+          orderBy: { createdAt: 'asc' },
+        },
+      },
     });
     return row ? toChatMessage(row) : null;
   }
@@ -289,13 +362,31 @@ export class ChatPrismaStorage implements IProjectStorage {
         parentId: message.parentId ?? null,
         role: message.role,
         messageType: message.messageType,
-        contentText: message.contentText ?? null,
-        contentJson: message.contentJson ?? null,
+        contentText: message.content.kind === 'text' ? message.content.text : null,
+        contentParts:
+          message.content.kind === 'parts'
+            ? JSON.stringify({ parts: message.content.parts })
+            : null,
         metadata: message.metadata ?? null,
         versionId: message.versionId ?? null,
         status: message.status,
         createdAt: message.createdAt,
         updatedAt: message.updatedAt,
+        toolCalls:
+          message.content.kind === 'text' && message.content.toolCalls?.length
+            ? {
+                create: message.content.toolCalls.map((toolCall) => ({
+                  id: createId(),
+                  toolCallId: toolCall.id,
+                  toolName: toolCall.name,
+                  argumentsJson: toolCall.arguments ? JSON.stringify(toolCall.arguments) : null,
+                  success: toolCall.success,
+                  resultSummary: toolCall.resultSummary ?? null,
+                  createdAt: message.createdAt,
+                  updatedAt: message.updatedAt,
+                })),
+              }
+            : undefined,
       },
     });
     await this.prisma.project.updateMany({
@@ -310,13 +401,26 @@ export class ChatPrismaStorage implements IProjectStorage {
     content: string
   ): Promise<ChatMessage | null> {
     const now = nowMs();
+    const current = await this.prisma.chatMessage.findFirst({
+      where: { id: messageId, projectId, yn: 1 },
+    });
+    if (!current) return null;
     const result = await this.prisma.chatMessage.updateMany({
       where: { id: messageId, projectId, yn: 1 },
-      data: { contentText: content, updatedAt: now },
+      data: {
+        messageType: current.messageType === 'markdown' ? 'markdown' : 'text',
+        contentText: content,
+        updatedAt: now,
+      },
     });
     if (result.count === 0) return null;
     const row = await this.prisma.chatMessage.findFirst({
       where: { id: messageId, projectId, yn: 1 },
+      include: {
+        toolCalls: {
+          orderBy: { createdAt: 'asc' },
+        },
+      },
     });
     return row ? toChatMessage(row) : null;
   }

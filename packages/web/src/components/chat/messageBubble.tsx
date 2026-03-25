@@ -5,12 +5,13 @@
 
 import ReactMarkdown from 'react-markdown';
 import { cn } from '@/lib/utils';
-import type { Message, StreamPhase, StreamToolCall } from '@/types/chat';
+import { INITIAL_STREAM_STAGES, type Message, type StreamStagesActive, type StreamToolCall } from '@/types/chat';
 
 export interface MessageBubbleProps {
   message: Message;
   isStreaming?: boolean;
-  streamPhase?: StreamPhase | null;
+  /** 为 null 时表示非流式目标气泡，不按阶段展示 loading */
+  streamStages?: StreamStagesActive | null;
   streamToolCalls?: StreamToolCall[];
   className?: string;
 }
@@ -18,16 +19,16 @@ export interface MessageBubbleProps {
 export function MessageBubble({
   message,
   isStreaming = false,
-  streamPhase = null,
+  streamStages = null,
   streamToolCalls = [],
   className,
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const useMarkdown = message.contentFormat === 'markdown' && !isUser;
-  const showThinking =
-    !isUser &&
-    isStreaming &&
-    (streamPhase === 'thinking' || (!message.content && streamPhase !== 'content'));
+  const stages = streamStages ?? INITIAL_STREAM_STAGES;
+  const showThinking = !isUser && isStreaming && stages.thinking;
+  const showContentPending =
+    !isUser && isStreaming && stages.content && !message.content.trim();
   const streamingToolCalls = !isUser && isStreaming && streamToolCalls.length > 0;
 
   const messageToolCalls =
@@ -107,6 +108,13 @@ export function MessageBubble({
               <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70 animate-thinking [animation-delay:0.4s]" />
             </span>
             <span className="ml-1 text-xs">正在思考...</span>
+          </div>
+        ) : showContentPending ? (
+          <div className="flex items-center gap-1 py-0.5 text-muted-foreground">
+            <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
+              <span className="h-1.5 w-1.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            </span>
+            <span className="text-xs">正在生成...</span>
           </div>
         ) : useMarkdown ? (
           <div className="prose prose-sm dark:prose-invert max-w-none break-words">

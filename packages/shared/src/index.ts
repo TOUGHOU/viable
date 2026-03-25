@@ -10,4 +10,5 @@ export function getSharedPackageName(): string {
   return SHARED_PACKAGE;
 }
 
-export * from './types/messag';
+export * from './types/message';
+export * from './types/stream';

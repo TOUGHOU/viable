@@ -8,6 +8,7 @@
     "dev": "pnpm --filter @vibe/web --filter @vibe/service run dev",
     "dev:web": "pnpm --filter @vibe/web run dev",
     "dev:service": "pnpm --filter @vibe/service run dev",
+    "dev:shared": "pnpm --filter @vibe/shared run dev",
     "build": "pnpm -r run build",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",

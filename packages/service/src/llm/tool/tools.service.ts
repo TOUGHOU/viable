@@ -19,6 +19,15 @@ const MAX_SEARCH_FILE_SIZE = 512 * 1024; // 512KB
 const RUN_COMMAND_TIMEOUT_MS = 60_000;
 const STDOUT_TAIL_LEN = 2000;
 const STDERR_TAIL_LEN = 4000;
+const LOCAL_PREVIEW_DIR_DEFAULT = pathModule.join(process.cwd(), 'data/preview');
+
+function isLocalDebugMode(): boolean {
+  return process.env.VIBE_PREVIEW_MODE === 'local-debug';
+}
+
+function getLocalPreviewDirRoot(): string {
+  return process.env.VIBE_LOCAL_PREVIEW_ROOT ?? LOCAL_PREVIEW_DIR_DEFAULT;
+}
 
 export type ToolResult =
   | { success: true; data: unknown }
@@ -41,6 +50,10 @@ export class ToolsService {
   constructor(private readonly sandboxService: SandboxService) {}
 
   private getWorkspaceRoot(override?: string): string {
+    if (isLocalDebugMode() && override) {
+      return pathModule.resolve(getLocalPreviewDirRoot(), override);
+    }
+
     const base = override ?? process.env.WORKSPACE_ROOT ?? process.cwd();
     return pathModule.resolve(base);
   }
@@ -71,7 +84,7 @@ export class ToolsService {
    * read_file：读取文件内容
    */
   async readFile(filePath: string, workspaceRoot?: string): Promise<ToolResult> {
-    if (workspaceRoot) {
+    if (workspaceRoot && !isLocalDebugMode()) {
       try {
         const resolved = this.resolveSandboxPath(filePath);
         const content = await this.sandboxService.readFile(workspaceRoot, resolved);
@@ -97,7 +110,7 @@ export class ToolsService {
    */
   async writeFile(filePath: string, content: string, workspaceRoot?: string): Promise<ToolResult> {
     const conversationId = workspaceRoot;
-    if (conversationId) {
+    if (conversationId && !isLocalDebugMode()) {
       try {
         const resolved = this.resolveSandboxPath(filePath);
         await this.sandboxService.writeFile(conversationId, resolved, content);
@@ -123,7 +136,7 @@ export class ToolsService {
    * list_directory：列出目录下的文件和子目录
    */
   async listDirectory(dirPath?: string, conversationId?: string): Promise<ToolResult> {
-    if (conversationId) {
+    if (conversationId && !isLocalDebugMode()) {
       try {
         const dir = dirPath ?? '.';
         const resolved = this.resolveSandboxPath(dir);
@@ -185,7 +198,7 @@ export class ToolsService {
     filePattern?: string,
     conversationId?: string
   ): Promise<ToolResult> {
-    if (conversationId) {
+    if (conversationId && !isLocalDebugMode()) {
       try {
         const scope = scopePath ? this.resolveSandboxPath(scopePath) : SANDBOX_APP_PATH;
         const escaped = query.replace(/"/g, '\\"');
@@ -282,7 +295,7 @@ export class ToolsService {
    * run_command：在指定目录执行 shell 命令
    */
   async runCommand(command: string, cwd?: string, conversationId?: string): Promise<ToolResult> {
-    if (conversationId) {
+    if (conversationId && !isLocalDebugMode()) {
       try {
         const workDir = cwd ? this.resolveSandboxPath(cwd) : SANDBOX_APP_PATH;
         const { stdout, stderr, exitCode } = await this.sandboxService.runCommandForTool(

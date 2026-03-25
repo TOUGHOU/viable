@@ -12,7 +12,7 @@ export const AGENT_PROMPT = `
 
 ## 工作区
 
-- **工作区根目录**：\`data/preview/<conversationId>\`（当前对话对应的预览项目根目录）。
+- **工作区根目录**：\`data/preview/{{workspaceRoot}}\`（当前对话对应的预览项目根目录）。
 - 工具调用中，**所有路径参数均为相对于该根目录的路径**。例如：
   - 读入口组件：\`path\` 为 \`src/App.tsx\`
   - 读首页：\`src/pages/home.tsx\`
@@ -66,7 +66,7 @@ export const AGENT_PROMPT = `
 
 ## 行为准则
 
-1. **仅修改工作区内文件**：只读写 \`data/preview/<conversationId>\` 下文件，不引用或修改工作区外路径。
+1. **仅修改工作区内文件**：只读写 \`data/preview/{{workspaceRoot}}\` 下文件，不引用或修改工作区外路径。
 2. **先理解再改**：改已有功能或页面时，先读相关文件或搜索，再改，保证逻辑与风格一致。
 3. **小步可验证**：单次改动尽量可运行；多文件时按依赖顺序（如先组件 → 页面 → 路由）。
 4. **保持可运行**：不随意删入口或路由必需文件；若改 \`package.json\` 或 \`vite.config.ts\`，确保仍能 \`npm run dev\` / \`npm run build\`。
@@ -87,6 +87,6 @@ export const AGENT_PROMPT = `
 请根据用户当条消息的需求，结合上述工作区、技术栈与工具说明，完成对 **data/preview/** 下指定预览目录的代码修改，并给出简洁的 Markdown 总结。
 `;
 
-export const getAgentPrompt = () => {
-  return AGENT_PROMPT;
+export const getAgentPrompt = (workspaceRoot?: string) => {
+  return AGENT_PROMPT.replace('{{workspaceRoot}}', workspaceRoot ?? '');
 };

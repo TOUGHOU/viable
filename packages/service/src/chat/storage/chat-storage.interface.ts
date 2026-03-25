@@ -4,6 +4,15 @@
  * @description 项目与消息存储抽象，支持用户、项目、版本、对话消息
  */
 
+import type {
+  ChatMessage,
+  ChatMessageStatus,
+  ChatMessageToolCall,
+  PartsMessageContent,
+} from '@vibe/shared/src/types/message';
+
+export type { ChatMessage, ChatMessageStatus, ChatMessageToolCall, PartsMessageContent };
+
 export type PreviewStatus = 'pending' | 'running' | 'failed';
 
 /** 用户（匿名或登录），用于项目限额等 */
@@ -33,23 +42,6 @@ export interface Project {
   previewUrl?: string | null;
   sandboxId?: string | null;
   previewStatus: PreviewStatus;
-}
-
-/** 对话消息：支持多种 messageType，assistant 可能关联 versionId */
-export interface ChatMessage {
-  id: string;
-  projectId: string;
-  conversationId: string;
-  parentId?: string | null;
-  role: 'user' | 'assistant' | 'system';
-  messageType: string;
-  contentText?: string | null;
-  contentJson?: string | null;
-  metadata?: string | null;
-  versionId?: string | null;
-  status: string;
-  createdAt: number;
-  updatedAt: number;
 }
 
 export interface PaginationMeta {

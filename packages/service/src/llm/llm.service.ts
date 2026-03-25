@@ -6,19 +6,14 @@
 
 import { Injectable, Logger, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
 import OpenAI from 'openai';
-/** 对话历史项，仅需 role 与 content 供 LLM 使用 */
-interface ChatHistoryMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
 import { ToolsService } from './tool/tools.service';
 import { getAgentPrompt } from './prompt/agent-prompt';
 import { TOOL_SCHEMA } from './tool/tool-schema';
 import { SelectedElement } from 'src/type';
-import { buildUserPrompt } from './util/build-user-prompt';
+import { buildUserPrompt } from './prompt/build-user-prompt';
+import type { FinishReason, StepUsage, TextStreamPart, TotalUsage } from '@vibe/shared';
 
 const AGENT_MAX_TURNS = 15;
-const RECENT_MESSAGES_WINDOW = 20;
 
 /** 流式 chunk 中用于累积的 tool call */
 interface AccumulatedToolCall {
@@ -26,24 +21,6 @@ interface AccumulatedToolCall {
   type: 'function';
   function: { name: string; arguments: string };
 }
-
-/** 流式对话事件：供前端展示思考/工具调用状态与文本内容 */
-export type StreamChatEvent =
-  | { type: 'content'; chunk: string }
-  | { type: 'status'; phase: 'thinking' | 'tool_calls' | 'content' | 'done' }
-  | {
-      type: 'tool_call_start';
-      id: string;
-      name: string;
-      arguments: Record<string, unknown>;
-    }
-  | {
-      type: 'tool_call_end';
-      id: string;
-      name: string;
-      success: boolean;
-      resultSummary?: string;
-    };
 
 const MAX_RESULT_SUMMARY_LEN = 200;
 
@@ -53,16 +30,18 @@ function toResultSummary(raw: string): string {
   return s.slice(0, MAX_RESULT_SUMMARY_LEN) + '…';
 }
 
+function mapFinishReason(reason: string | null | undefined): FinishReason {
+  if (reason === 'stop') return 'stop';
+  if (reason === 'length') return 'length';
+  if (reason === 'tool_calls') return 'tool-calls';
+  if (reason === 'content_filter') return 'content-filter';
+  return 'other';
+}
+
 @Injectable()
 export class LlmService implements OnModuleInit {
   private readonly logger = new Logger(LlmService.name);
   private codingAgentPrompt: string | null = null;
-  private messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-    {
-      role: 'system',
-      content: getAgentPrompt(),
-    },
-  ];
 
   constructor(private readonly toolsService: ToolsService) {}
 
@@ -113,21 +92,43 @@ export class LlmService implements OnModuleInit {
     content: string;
     selectedElements?: Array<SelectedElement>;
     workspaceRoot?: string;
-  }): AsyncGenerator<StreamChatEvent> {
+  }): AsyncGenerator<TextStreamPart> {
     const { content, selectedElements, workspaceRoot } = params;
     const client = this.getClient();
     const model = this.getModel();
-
-    this.messages.push({ role: 'user', content: buildUserPrompt(content, selectedElements) });
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      {
+        role: 'system',
+        content: getAgentPrompt(workspaceRoot),
+      },
+      { role: 'user', content: buildUserPrompt(content, selectedElements) },
+    ];
 
     let turns = 0;
+    let stepIndex = 0;
+    let totalUsage: TotalUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+    yield { type: 'start' };
+
     try {
       while (turns < AGENT_MAX_TURNS) {
         turns += 1;
+        stepIndex += 1;
+        yield {
+          type: 'start-step',
+          request: {
+            body: JSON.stringify({
+              model,
+              turn: turns,
+              hasSelectedElements: Array.isArray(selectedElements) && selectedElements.length > 0,
+              workspaceRoot: workspaceRoot ?? null,
+            }),
+          },
+          warnings: [],
+        };
 
         const stream = await client.chat.completions.create({
           model,
-          messages: this.messages,
+          messages,
           stream: true,
           tools: TOOL_SCHEMA,
           tool_choice: 'auto',
@@ -135,22 +136,30 @@ export class LlmService implements OnModuleInit {
 
         const toolCallsAccum: AccumulatedToolCall[] = [];
         let accumulatedContent = '';
-        let contentPhaseEmitted = false;
-
-        yield { type: 'status', phase: 'thinking' };
+        let stepUsage: StepUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+        const emittedStreamingStart = new Set<string>();
+        let stepFinished = false;
 
         for await (const chunk of stream) {
           const choice = chunk.choices?.[0];
           const delta = choice?.delta;
           const finishReason = choice?.finish_reason;
+          const usageFromChunk = (
+            chunk as {
+              usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+            }
+          ).usage;
+          if (usageFromChunk) {
+            stepUsage = {
+              inputTokens: usageFromChunk.prompt_tokens ?? 0,
+              outputTokens: usageFromChunk.completion_tokens ?? 0,
+              totalTokens: usageFromChunk.total_tokens ?? 0,
+            };
+          }
 
           if (delta?.content) {
-            if (!contentPhaseEmitted) {
-              contentPhaseEmitted = true;
-              yield { type: 'status', phase: 'content' };
-            }
             accumulatedContent += delta.content;
-            yield { type: 'content', chunk: delta.content };
+            yield { type: 'text', text: delta.content };
           }
 
           if (delta?.tool_calls?.length) {
@@ -166,13 +175,26 @@ export class LlmService implements OnModuleInit {
               const acc = toolCallsAccum[i];
               if ((d as { id?: string }).id) acc.id = (d as { id?: string }).id!;
               if (d.function?.name) acc.function.name += d.function.name ?? '';
-              if (d.function?.arguments) acc.function.arguments += d.function.arguments ?? '';
+              if (d.function?.arguments) {
+                acc.function.arguments += d.function.arguments ?? '';
+                if (acc.id && acc.function.name) {
+                  if (!emittedStreamingStart.has(acc.id)) {
+                    emittedStreamingStart.add(acc.id);
+                    yield {
+                      type: 'tool-call-streaming-start',
+                      toolCallId: acc.id,
+                      toolName: acc.function.name,
+                    };
+                  }
+                  yield {
+                    type: 'tool-call-delta',
+                    toolCallId: acc.id,
+                    toolName: acc.function.name,
+                    argsTextDelta: d.function.arguments,
+                  };
+                }
+              }
             }
-          }
-
-          if (finishReason === 'stop' || finishReason === 'length') {
-            yield { type: 'status', phase: 'done' };
-            return;
           }
 
           if (finishReason === 'tool_calls' && toolCallsAccum.length > 0) {
@@ -184,29 +206,40 @@ export class LlmService implements OnModuleInit {
                 function: { name: tc.function.name, arguments: tc.function.arguments },
               }));
 
-            this.messages.push({
-              role: 'assistant',
-              content: accumulatedContent.trim() || null,
-              tool_calls: toolCallsForApi,
-            });
-
-            yield { type: 'status', phase: 'tool_calls' };
-
             for (const tc of toolCallsForApi) {
               const fn = 'function' in tc ? tc.function : undefined;
+              const argsText = fn?.arguments ?? '{}';
               const args = (() => {
                 try {
-                  return JSON.parse(fn?.arguments ?? '{}') as Record<string, unknown>;
+                  return JSON.parse(argsText) as Record<string, unknown>;
                 } catch {
                   return {};
                 }
               })();
               yield {
-                type: 'tool_call_start',
-                id: tc.id,
-                name: fn?.name ?? '',
-                arguments: args,
+                type: 'tool-call',
+                toolCallId: tc.id,
+                toolName: fn?.name ?? '',
+                input: args,
               };
+            }
+
+            messages.push({
+              role: 'assistant',
+              content: accumulatedContent.trim() || null,
+              tool_calls: toolCallsForApi,
+            });
+
+            for (const tc of toolCallsForApi) {
+              const fn = 'function' in tc ? tc.function : undefined;
+              const argsText = fn?.arguments ?? '{}';
+              const args = (() => {
+                try {
+                  return JSON.parse(argsText) as Record<string, unknown>;
+                } catch {
+                  return {};
+                }
+              })();
               let toolResult: string;
               let ok = true;
               try {
@@ -219,27 +252,118 @@ export class LlmService implements OnModuleInit {
                 ok = false;
                 toolResult = toolErr instanceof Error ? toolErr.message : '工具执行失败';
               }
-              this.messages.push({
+              messages.push({
                 role: 'tool',
                 tool_call_id: tc.id,
                 content: toolResult,
               });
               yield {
-                type: 'tool_call_end',
-                id: tc.id,
-                name: fn?.name ?? '',
-                success: ok,
-                resultSummary: toResultSummary(toolResult),
+                type: 'tool-result',
+                toolCallId: tc.id,
+                toolName: fn?.name ?? '',
+                input: args,
+                output: { result: toResultSummary(toolResult), isError: !ok },
               };
             }
+
+            totalUsage = {
+              inputTokens: (totalUsage.inputTokens ?? 0) + (stepUsage.inputTokens ?? 0),
+              outputTokens: (totalUsage.outputTokens ?? 0) + (stepUsage.outputTokens ?? 0),
+              totalTokens:
+                (totalUsage.totalTokens ?? 0) +
+                (stepUsage.totalTokens ??
+                  (stepUsage.inputTokens ?? 0) + (stepUsage.outputTokens ?? 0)),
+            };
+            yield {
+              type: 'finish-step',
+              response: {
+                id: `resp_${stepIndex}`,
+                modelId: model,
+                timestamp: new Date().toISOString(),
+                headers: {},
+              },
+              usage: stepUsage,
+              finishReason: 'tool-calls',
+              isContinued: true,
+            };
+            stepFinished = true;
             break;
           }
+
+          if (finishReason && finishReason !== 'tool_calls') {
+            const mapped = mapFinishReason(finishReason);
+            totalUsage = {
+              inputTokens: (totalUsage.inputTokens ?? 0) + (stepUsage.inputTokens ?? 0),
+              outputTokens: (totalUsage.outputTokens ?? 0) + (stepUsage.outputTokens ?? 0),
+              totalTokens:
+                (totalUsage.totalTokens ?? 0) +
+                (stepUsage.totalTokens ??
+                  (stepUsage.inputTokens ?? 0) + (stepUsage.outputTokens ?? 0)),
+            };
+            yield {
+              type: 'finish-step',
+              response: {
+                id: `resp_${stepIndex}`,
+                modelId: model,
+                timestamp: new Date().toISOString(),
+                headers: {},
+              },
+              usage: stepUsage,
+              finishReason: mapped,
+              isContinued: false,
+            };
+            yield {
+              type: 'finish',
+              finishReason: mapped,
+              totalUsage,
+            };
+            return;
+          }
+        }
+
+        if (!stepFinished) {
+          const mapped: FinishReason = 'other';
+          totalUsage = {
+            inputTokens: (totalUsage.inputTokens ?? 0) + (stepUsage.inputTokens ?? 0),
+            outputTokens: (totalUsage.outputTokens ?? 0) + (stepUsage.outputTokens ?? 0),
+            totalTokens:
+              (totalUsage.totalTokens ?? 0) +
+              (stepUsage.totalTokens ??
+                (stepUsage.inputTokens ?? 0) + (stepUsage.outputTokens ?? 0)),
+          };
+          yield {
+            type: 'finish-step',
+            response: {
+              id: `resp_${stepIndex}`,
+              modelId: model,
+              timestamp: new Date().toISOString(),
+              headers: {},
+            },
+            usage: stepUsage,
+            finishReason: mapped,
+            isContinued: false,
+          };
+          yield {
+            type: 'finish',
+            finishReason: mapped,
+            totalUsage,
+          };
+          return;
         }
       }
+      yield {
+        type: 'finish',
+        finishReason: 'other',
+        totalUsage,
+      };
     } catch (err) {
-      if (err instanceof ServiceUnavailableException) throw err;
       const message = err instanceof Error ? err.message : '大模型调用失败';
-      throw new ServiceUnavailableException(message);
+      yield { type: 'error', error: { message } };
+      yield {
+        type: 'finish',
+        finishReason: 'error',
+        totalUsage,
+      };
     }
   }
 }

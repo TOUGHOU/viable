@@ -5,12 +5,12 @@
 
 import { MessageBubble } from './messageBubble';
 import { cn } from '@/lib/utils';
-import type { Message, StreamPhase, StreamToolCall } from '@/types/chat';
+import { INITIAL_STREAM_STAGES, type Message, type StreamStagesActive, type StreamToolCall } from '@/types/chat';
 
 export interface MessageListProps {
   messages: Message[];
   streamingMessageId?: string | null;
-  streamPhase?: StreamPhase | null;
+  streamStages?: StreamStagesActive;
   streamToolCalls?: StreamToolCall[];
   className?: string;
 }
@@ -18,7 +18,8 @@ export interface MessageListProps {
 export function MessageList({
   messages,
   streamingMessageId = null,
-  streamPhase = null,
+  streamStages = INITIAL_STREAM_STAGES,
+  streamToolCalls = [],
   className,
 }: MessageListProps) {
   return (
@@ -35,7 +36,8 @@ export function MessageList({
           <MessageBubble
             message={msg}
             isStreaming={streamingMessageId != null && msg.id === streamingMessageId}
-            streamPhase={msg.id === streamingMessageId ? streamPhase : null}
+            streamStages={msg.id === streamingMessageId ? streamStages : null}
+            streamToolCalls={msg.id === streamingMessageId ? streamToolCalls : []}
           />
         </div>
       ))}

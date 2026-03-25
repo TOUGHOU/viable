@@ -7,8 +7,9 @@ import { MessageList } from '@/components/chat/messageList';
 import { ChatInputBar } from '@/components/chat/chatInputBar';
 import { useChatStore, createMessage } from '@/store/chatStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import type { Message, SkillId, StreamPhase, StreamToolCall } from '@/types/chat';
+import { INITIAL_STREAM_STAGES, type Message, type SkillId, type StreamStagesActive, type StreamToolCall } from '@/types/chat';
 import { useState, useRef, useEffect, useCallback, startTransition } from 'react';
+import type { TextStreamPart } from '@vibe/shared';
 import {
   sendMessage as sendMessageApi,
   sendMessageStream as sendMessageStreamApi,
@@ -27,7 +28,7 @@ export function ConversationPanel({ projectId, title, useStream = true }: Conver
   const [error, setError] = useState<string | null>(null);
   const [lastFailedContent, setLastFailedContent] = useState<string | null>(null);
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
-  const [streamPhase, setStreamPhase] = useState<StreamPhase | null>(null);
+  const [streamStages, setStreamStages] = useState<StreamStagesActive>(INITIAL_STREAM_STAGES);
   const [streamToolCalls, setStreamToolCalls] = useState<StreamToolCall[]>([]);
   const streamingIdRef = useRef<string | null>(null);
   const listScrollRef = useRef<HTMLDivElement>(null);
@@ -71,7 +72,7 @@ export function ConversationPanel({ projectId, title, useStream = true }: Conver
         addMessage(projectId, placeholderAssistant);
         streamingIdRef.current = placeholderAssistant.id;
         setStreamingMessageId(placeholderAssistant.id);
-        setStreamPhase(null);
+        setStreamStages(INITIAL_STREAM_STAGES);
         setStreamToolCalls([]);
 
         try {
@@ -82,71 +83,107 @@ export function ConversationPanel({ projectId, title, useStream = true }: Conver
               selectedElements: selectedElements.length > 0 ? selectedElements : undefined,
             },
             {
-              onUserMessage() {},
-              onStatus(phase) {
-                startTransition(() => setStreamPhase(phase));
-              },
-              onToolCallStart(payload) {
-                startTransition(() => {
-                  setStreamToolCalls((prev) => [
-                    ...prev,
-                    {
-                      id: payload.id,
-                      name: payload.name,
-                      status: 'running',
-                      arguments: payload.arguments,
-                    },
-                  ]);
-                });
-              },
-              onToolCallEnd(payload) {
-                startTransition(() => {
-                  setStreamToolCalls((prev) =>
-                    prev.map((tc) =>
-                      tc.id === payload.id
-                        ? {
-                            ...tc,
-                            status: 'done' as const,
-                            success: payload.success,
-                            resultSummary: payload.resultSummary,
-                          }
-                        : tc
-                    )
+              onPart(part: TextStreamPart) {
+                if (part.type === 'start-step') {
+                  startTransition(() =>
+                    setStreamStages((prev) => ({ ...prev, thinking: true }))
                   );
-                });
-              },
-              onContent(chunk) {
-                startTransition(() => {
-                  const prev = getMessages(projectId);
-                  let lastAssistantIndex = -1;
-                  for (let i = prev.length - 1; i >= 0; i--) {
-                    if (prev[i].role === 'assistant') {
-                      lastAssistantIndex = i;
-                      break;
+                  return;
+                }
+
+                if (part.type === 'text') {
+                  startTransition(() => {
+                    setStreamStages((prev) => ({ ...prev, thinking: false, content: true }));
+                    const prev = getMessages(projectId);
+                    let lastAssistantIndex = -1;
+                    for (let i = prev.length - 1; i >= 0; i--) {
+                      if (prev[i].role === 'assistant') {
+                        lastAssistantIndex = i;
+                        break;
+                      }
                     }
+                    if (lastAssistantIndex === -1) return;
+                    const updated = [...prev];
+                    const last = { ...updated[lastAssistantIndex] };
+                    last.content += part.text;
+                    updated[lastAssistantIndex] = last;
+                    setMessages(projectId, updated);
+                  });
+                  return;
+                }
+
+                if (part.type === 'tool-call') {
+                  startTransition(() => {
+                    setStreamStages((prev) => ({
+                      ...prev,
+                      thinking: false,
+                      content: false,
+                      tool_calls: true,
+                    }));
+                    setStreamToolCalls((prev) => [
+                      ...prev,
+                      {
+                        id: part.toolCallId,
+                        name: part.toolName,
+                        status: 'running',
+                        arguments: part.input as Record<string, unknown>,
+                      },
+                    ]);
+                  });
+                  return;
+                }
+
+                if (part.type === 'tool-result') {
+                  const output = part.output as { isError?: boolean; result?: string };
+                  startTransition(() => {
+                    setStreamToolCalls((prev) =>
+                      prev.map((tc) =>
+                        tc.id === part.toolCallId
+                          ? {
+                              ...tc,
+                              status: 'done' as const,
+                              success: !output?.isError,
+                              resultSummary:
+                                typeof output?.result === 'string'
+                                  ? output.result
+                                  : JSON.stringify(part.output),
+                            }
+                          : tc
+                      )
+                    );
+                    setStreamStages((prev) => ({ ...prev, tool_calls: false }));
+                  });
+                  return;
+                }
+
+                if (part.type === 'finish-step') {
+                  startTransition(() =>
+                    setStreamStages((prev) => ({ ...prev, thinking: false, content: false }))
+                  );
+                  return;
+                }
+
+                if (part.type === 'finish') {
+                  const pid = streamingIdRef.current;
+                  streamingIdRef.current = null;
+                  setStreamingMessageId(null);
+                  setStreamStages(INITIAL_STREAM_STAGES);
+                  setStreamToolCalls([]);
+                  if (part.finishReason === 'error') {
+                    return;
                   }
-                  if (lastAssistantIndex === -1) return;
-                  const updated = [...prev];
-                  const last = { ...updated[lastAssistantIndex] };
-                  last.content += chunk;
-                  updated[lastAssistantIndex] = last;
-                  setMessages(projectId, updated);
-                });
-              },
-              onAssistantMessage(assistantMessage) {
-                const pid = streamingIdRef.current;
-                streamingIdRef.current = null;
-                setStreamingMessageId(null);
-                setStreamPhase(null);
-                setStreamToolCalls([]);
-                const prev = getMessages(projectId);
-                const idx = prev.findIndex((m) => m.id === pid);
-                const next =
-                  idx >= 0
-                    ? prev.map((m, i) => (i === idx ? assistantMessage : m))
-                    : [...prev, assistantMessage];
-                setMessages(projectId, next);
-                setSelectedElements([]);
+                  const prev = getMessages(projectId);
+                  const idx = prev.findIndex((m) => m.id === pid);
+                  if (idx < 0) return;
+                  const assistantMessage = {
+                    ...prev[idx],
+                    contentFormat: 'markdown' as const,
+                    updatedAt: new Date().toISOString(),
+                  };
+                  const next = prev.map((m, i) => (i === idx ? assistantMessage : m));
+                  setMessages(projectId, next);
+                  setSelectedElements([]);
+                }
               },
               onError(msg) {
                 setError(msg);
@@ -154,7 +191,7 @@ export function ConversationPanel({ projectId, title, useStream = true }: Conver
                 const pid = streamingIdRef.current;
                 streamingIdRef.current = null;
                 setStreamingMessageId(null);
-                setStreamPhase(null);
+                setStreamStages(INITIAL_STREAM_STAGES);
                 setStreamToolCalls([]);
                 const prev = getMessages(projectId);
                 setMessages(
@@ -167,7 +204,7 @@ export function ConversationPanel({ projectId, title, useStream = true }: Conver
           const pid = streamingIdRef.current;
           if (pid) {
             setStreamingMessageId(null);
-            setStreamPhase(null);
+            setStreamStages(INITIAL_STREAM_STAGES);
             setStreamToolCalls([]);
             const prev = getMessages(projectId);
             setMessages(
@@ -180,7 +217,7 @@ export function ConversationPanel({ projectId, title, useStream = true }: Conver
           setError(msg);
           setLastFailedContent(text);
           setStreamingMessageId(null);
-          setStreamPhase(null);
+          setStreamStages(INITIAL_STREAM_STAGES);
           setStreamToolCalls([]);
           const prev = getMessages(projectId);
           const pid = streamingIdRef.current;
@@ -247,7 +284,8 @@ export function ConversationPanel({ projectId, title, useStream = true }: Conver
         <MessageList
           messages={messages}
           streamingMessageId={streamingMessageId}
-          streamPhase={streamPhase}
+          streamStages={streamStages}
+          streamToolCalls={streamToolCalls}
           className="p-4"
         />
       </div>

@@ -1,10 +1,11 @@
 /**
- * @file chatApi.ts
+ * @file: chatApi.ts
  * @author houfujian houfujian@jd.com
  * @description 项目与对话相关 API，统一 POST；一次对话即一个项目
  */
 
-import type { Project, Message, SelectedElement, StreamPhase } from '@/types/chat';
+import type { Project, Message, SelectedElement, StreamStageStatusEvent } from '@/types/chat';
+import type { TextStreamPart } from '@vibe/shared';
 
 const BASE_URL =
   (typeof import.meta !== 'undefined' &&
@@ -66,22 +67,21 @@ function parseToolCalls(raw: Record<string, unknown>[]): Message['toolCalls'] {
 function toMessage(m: Record<string, unknown>): Message {
   const createdAt = m.createdAt as number | string;
   const updatedAt = m.updatedAt as number | string;
-  let rawToolCalls = m.toolCalls as Record<string, unknown>[] | undefined;
-  if (!Array.isArray(rawToolCalls) && typeof m.contentJson === 'string') {
-    try {
-      const parsed = JSON.parse(m.contentJson) as { toolCalls?: Record<string, unknown>[] };
-      rawToolCalls = parsed?.toolCalls;
-    } catch {
-      // contentJson 解析失败则忽略
-    }
-  }
-  const toolCalls = Array.isArray(rawToolCalls)
-    ? parseToolCalls(rawToolCalls)
-    : undefined;
+  const structuredContent = m.content as
+    | { kind?: string; text?: string; toolCalls?: Record<string, unknown>[] }
+    | undefined;
+  const rawToolCalls =
+    (Array.isArray(structuredContent?.toolCalls) ? structuredContent?.toolCalls : undefined) ??
+    (m.toolCalls as Record<string, unknown>[] | undefined);
+  const toolCalls = Array.isArray(rawToolCalls) ? parseToolCalls(rawToolCalls) : undefined;
+  const textFromStructured =
+    structuredContent?.kind === 'text' && typeof structuredContent.text === 'string'
+      ? structuredContent.text
+      : undefined;
   return {
     id: m.id as string,
     role: m.role as Message['role'],
-    content: (m.content as string) ?? (m.contentText as string) ?? '',
+    content: textFromStructured ?? (m.content as string) ?? (m.contentText as string) ?? '',
     contentFormat: ((m.contentFormat as string) ??
       ((m.messageType as string) === 'markdown' ? 'markdown' : 'text')) as Message['contentFormat'],
     createdAt:
@@ -216,9 +216,10 @@ export async function sendMessage(body: {
 export async function sendMessageStream(
   body: { projectId: string; content: string; selectedElements?: SelectedElement[] },
   callbacks: {
+    onPart?: (part: TextStreamPart) => void;
     onUserMessage?: (message: Message) => void;
     onContent?: (chunk: string) => void;
-    onStatus?: (phase: StreamPhase) => void;
+    onStatus?: (event: StreamStageStatusEvent) => void;
     onToolCallStart?: (payload: {
       id: string;
       name: string;
@@ -252,58 +253,67 @@ export async function sendMessageStream(
   if (!reader) throw new Error('无响应体');
   const decoder = new TextDecoder();
   let buffer = '';
-  let currentEvent = '';
-  let currentData: string[] = [];
+  let sawContent = false;
 
-  const flushEvent = () => {
-    if (!currentEvent) return;
-    const data = currentData.join('\n').trim();
-    if (!data) {
-      currentEvent = '';
-      currentData = [];
+  const handlePart = (data: string) => {
+    if (!data) return;
+    let obj: TextStreamPart;
+    try {
+      obj = JSON.parse(data) as TextStreamPart;
+    } catch {
       return;
     }
-    try {
-      if (currentEvent === 'user_message' && callbacks.onUserMessage) {
-        callbacks.onUserMessage(toMessage(JSON.parse(data) as Record<string, unknown>));
-      } else if (currentEvent === 'content' && callbacks.onContent) {
-        try {
-          const parsed = JSON.parse(data) as string;
-          callbacks.onContent(parsed);
-        } catch {
-          callbacks.onContent(data);
-        }
-      } else if (currentEvent === 'status' && callbacks.onStatus) {
-        const obj = JSON.parse(data) as { phase: StreamPhase };
-        callbacks.onStatus(obj.phase);
-      } else if (currentEvent === 'tool_call_start' && callbacks.onToolCallStart) {
-        const obj = JSON.parse(data) as {
-          id: string;
-          name: string;
-          arguments: Record<string, unknown>;
-        };
-        callbacks.onToolCallStart(obj);
-      } else if (currentEvent === 'tool_call_end' && callbacks.onToolCallEnd) {
-        const obj = JSON.parse(data) as {
-          id: string;
-          name: string;
-          success: boolean;
-          resultSummary?: string;
-        };
-        callbacks.onToolCallEnd(obj);
-      } else if (currentEvent === 'assistant_message' && callbacks.onAssistantMessage) {
-        callbacks.onAssistantMessage(toMessage(JSON.parse(data) as Record<string, unknown>));
-      } else if (currentEvent === 'error' && callbacks.onError) {
-        const obj = JSON.parse(data) as { message?: string };
-        callbacks.onError(obj.message || data);
-      }
-    } catch {
-      if (currentEvent === 'content' && callbacks.onContent) {
-        callbacks.onContent(data);
-      }
+    callbacks.onPart?.(obj);
+
+    const type = obj.type;
+
+    if (type === 'start-step' && callbacks.onStatus) {
+      callbacks.onStatus({ type: 'thinking', finish: false });
+      return;
     }
-    currentEvent = '';
-    currentData = [];
+
+    if (type === 'text' && callbacks.onContent) {
+      if (!sawContent && callbacks.onStatus) {
+        callbacks.onStatus({ type: 'thinking', finish: true });
+        callbacks.onStatus({ type: 'content', finish: false });
+      }
+      sawContent = true;
+      callbacks.onContent(obj.text ?? '');
+      return;
+    }
+
+    if (type === 'tool-call' && callbacks.onToolCallStart) {
+      callbacks.onStatus?.({ type: 'tool_calls', finish: false });
+      callbacks.onToolCallStart({
+        id: obj.toolCallId ?? '',
+        name: obj.toolName ?? '',
+        arguments: (obj.input as Record<string, unknown>) ?? {},
+      });
+      return;
+    }
+
+    if (type === 'tool-result' && callbacks.onToolCallEnd) {
+      const output = (obj.output as { isError?: boolean; result?: string }) ?? {};
+      callbacks.onToolCallEnd({
+        id: obj.toolCallId ?? '',
+        name: obj.toolName ?? '',
+        success: !output.isError,
+        resultSummary: output.result,
+      });
+      callbacks.onStatus?.({ type: 'tool_calls', finish: true, finishReason: 'tool-calls' });
+      return;
+    }
+
+    if (type === 'finish-step' && callbacks.onStatus) {
+      const finishReason = (obj.finishReason as StreamStageStatusEvent['finishReason']) ?? 'stop';
+      callbacks.onStatus({ type: 'content', finish: true, finishReason });
+      return;
+    }
+
+    if (type === 'error' && callbacks.onError) {
+      const err = obj.error as { message?: string } | string | undefined;
+      callbacks.onError(typeof err === 'string' ? err : (err?.message ?? '流式请求失败'));
+    }
   };
 
   while (true) {
@@ -313,15 +323,9 @@ export async function sendMessageStream(
     const lines = buffer.split('\n');
     buffer = lines.pop() ?? '';
     for (const line of lines) {
-      if (line.startsWith('event: ')) {
-        flushEvent();
-        currentEvent = line.slice(7).trim();
-      } else if (line.startsWith('data: ')) {
-        currentData.push(line.slice(6));
-      } else if (line === '') {
-        flushEvent();
+      if (line.startsWith('data: ')) {
+        handlePart(line.slice(6).trim());
       }
     }
   }
-  flushEvent();
 }
